@@ -362,6 +362,11 @@ void FixACKS2ReaxFF::pre_force(int /*vflag*/)
   calculate_Q();
 }
 
+double FixACKS2ReaxFF::compute_scalar() {
+    // FixQEqReaxFF::compute_scalar() returns matvecs / 2.0 to account for CG on two systems
+    return matvecs;
+}
+
 /* ---------------------------------------------------------------------- */
 
 void FixACKS2ReaxFF::init_matvec()

@@ -36,6 +36,8 @@ class FixACKS2ReaxFF : public FixQEqReaxFF {
 
   double *get_s() { return s; }
 
+  double compute_scalar() override;
+
  protected:
   int NN, last_rows_rank, last_rows_flag;
 
