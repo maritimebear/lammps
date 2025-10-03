@@ -512,7 +512,7 @@ int FixACKS2ReaxFF::BiCGStab(double *b, double *x)
 
   int jj;
 
-  double zero_threshold = 1e-10; // Compare fabs(float) to this number instead of if float == 0
+  double zero_threshold = 1e-14; // Compare fabs(float) to this number instead of if float == 0
 
   sparse_matvec_acks2(&H, &X, x, d);
   pack_flag = 1;
