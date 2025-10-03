@@ -43,6 +43,7 @@ class FixACKS2ReaxFF : public FixQEqReaxFF {
 
   double **s_hist_X, **s_hist_last;
   double *bcut_acks2, bond_softness, **bcut;    // acks2 parameters
+  // bcut_acks2: atom-type specific cutoff parameter, bond_softness: global bond softness parameter, bcut: average of 2-atom type bcut_acks2 parameters
 
   sparse_matrix X;
   double *Xdia_inv;

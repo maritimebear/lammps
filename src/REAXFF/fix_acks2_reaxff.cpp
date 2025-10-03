@@ -198,6 +198,7 @@ void FixACKS2ReaxFF::pertype_parameters(char *arg)
   MPI_Bcast(eta,ntypes+1,MPI_DOUBLE,0,world);
   MPI_Bcast(gamma,ntypes+1,MPI_DOUBLE,0,world);
   MPI_Bcast(bcut_acks2,ntypes+1,MPI_DOUBLE,0,world);
+  // TODO: Not broadcasting bond_softness? Because proc 0 owns last two rows of ACKS2 matrix? But bond_softness should go into X matrix
 }
 
 /* ---------------------------------------------------------------------- */
@@ -369,7 +370,7 @@ double FixACKS2ReaxFF::compute_scalar() {
 
 /* ---------------------------------------------------------------------- */
 
-void FixACKS2ReaxFF::init_matvec()
+void FixACKS2ReaxFF::init_matvec() // Calculates pre-conditioner entries, pre-conditioner applied in BiCGStab()
 {
   /* fill-in H matrix */
   compute_H();
@@ -389,6 +390,9 @@ void FixACKS2ReaxFF::init_matvec()
 
     i = ilist[ii];
     if (atom->mask[i] & groupbit) {
+      // This section seems to be following from FixQEqReaxFF::init_storage()
+      // Hdia_inv and b_s are from QEq, Xdiag, Xdia_inv are ACKS2-specific
+      // QEq parts use local indices for atoms (i.e. atoms owned by this MPI proc, from ilist)?
 
       /* init pre-conditioner for H and init solution vectors */
       Hdia_inv[i] = 1. / eta[atom->type[i]];

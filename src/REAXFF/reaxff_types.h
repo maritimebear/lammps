@@ -47,7 +47,7 @@ typedef LAMMPS_NS::bigint rc_bigint;
 struct global_parameters {
   int n_global;
   int vdw_type;
-  double *l;
+  double *l; // Populated in reaxff_field.cpp: Read_Force_Field()
 };
 
 struct single_body_parameters {
