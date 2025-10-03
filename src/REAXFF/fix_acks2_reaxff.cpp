@@ -512,6 +512,8 @@ int FixACKS2ReaxFF::BiCGStab(double *b, double *x)
 
   int jj;
 
+  double zero_threshold = 1e-10; // Compare fabs(float) to this number instead of if float == 0
+
   sparse_matvec_acks2(&H, &X, x, d);
   pack_flag = 1;
   comm->reverse_comm(this); //Coll_Vector(d);
@@ -521,14 +523,16 @@ int FixACKS2ReaxFF::BiCGStab(double *b, double *x)
   bnorm = parallel_norm(b, nn);
   rnorm = parallel_norm(r, nn);
 
-  if (bnorm == 0.0) bnorm = 1.0;
+  // if (bnorm == 0.0) bnorm = 1.0;
+  if (fabs(bnorm) < zero_threshold) bnorm = 1.0;
   vector_copy(r_hat, r, nn);
   omega = 1.0;
   rho = 1.0;
 
   for (i = 1; i < imax && rnorm / bnorm > tolerance; ++i) {
     rho = parallel_dot(r_hat, r, nn);
-    if (rho == 0.0) break;
+    // if (rho == 0.0) break;
+    if (fabs(rho) < zero_threshold) break;
 
     if (i > 1) {
       beta = (rho / rho_old) * (alpha / omega);
@@ -604,12 +608,14 @@ int FixACKS2ReaxFF::BiCGStab(double *b, double *x)
     vector_sum(r , 1., q, -omega, y, nn);
 
     rnorm = parallel_norm(r, nn);
-    if (omega == 0) break;
+    // if (omega == 0) break;
+    if (fabs(omega) < zero_threshold) break;
     rho_old = rho;
   }
 
   if (comm->me == 0) {
-    if (omega == 0 || rho == 0) {
+    // if (omega == 0 || rho == 0) {
+    if (fabs(omega) < zero_threshold || fabs(rho) < zero_threshold) {
       error->warning(FLERR,"Fix acks2/reaxff BiCGStab numerical breakdown, omega = {:.8}, rho = {:.8}",
                       omega,rho);
     } else if (i >= imax) {
