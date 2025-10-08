@@ -23,6 +23,8 @@ FixStyle(acks2/reaxff,FixACKS2ReaxFF);
 
 #include "fix_qeq_reaxff.h"
 
+#include <sstream>
+
 namespace LAMMPS_NS {
 
 class FixACKS2ReaxFF : public FixQEqReaxFF {
@@ -66,6 +68,8 @@ class FixACKS2ReaxFF : public FixQEqReaxFF {
 
   int BiCGStab(double *, double *);
   void sparse_matvec_acks2(sparse_matrix *, sparse_matrix *, double *, double *);
+
+  void print_sparse_matrix(sparse_matrix&, const std::string&); // TODO: Remove after debugging ACKS2?
 
   int pack_forward_comm(int, int *, double *, int, int *) override;
   void unpack_forward_comm(int, int, double *) override;

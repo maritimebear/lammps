@@ -358,6 +358,10 @@ void FixACKS2ReaxFF::pre_force(int /*vflag*/)
 
   init_matvec();
 
+  // Print linear system before BiCGStab // TODO: Remove
+  print_sparse_matrix(this->H, "H");
+  print_sparse_matrix(this->X, "X");
+
   matvecs = BiCGStab(b_s, s); // BiCGStab on s - parallel
 
   calculate_Q();
@@ -683,6 +687,40 @@ void FixACKS2ReaxFF::sparse_matvec_acks2(sparse_matrix *H, sparse_matrix *X, dou
     }
   }
 
+}
+
+/* ---------------------------------------------------------------------- */
+
+void FixACKS2ReaxFF::print_sparse_matrix(sparse_matrix& matrix, const std::string& matrix_name) {
+    // Print sparse matrix to text file
+    // Unpacks CSR format, prints matrix elements with row and column indices
+    // Based on FixACKS2ReaxFF::sparse_matvec_acks2() and PuReMD Print_Sparse_Matrix2()
+
+    int ii, i, j, itr_j;
+
+    // Assemble output filename: append current timestep to matrix_name
+    std::stringstream filename;
+    filename << matrix_name << "." << update->ntimestep;
+
+    FILE* file_handle = fopen(filename.str().c_str(), "w");
+
+    // Header
+    fprintf(file_handle, "%6s %6s %6s %6s %24s\n", "ii", "i", "j", "itr_j", "val[itr_j]");
+
+    for (ii = 0; ii < nn; ++ii) {
+        i = ilist[ii];
+        if (atom->mask[i] & groupbit) {
+            for (itr_j = matrix.firstnbr[i]; itr_j < matrix.firstnbr[i] + matrix.numnbrs[i]; ++itr_j) {
+                j = matrix.jlist[itr_j];
+                fprintf(file_handle, "%6d %6d %6d %6d %24.15f\n", ii, i, j, itr_j, matrix.val[itr_j]);
+                // fprintf(file_handle, "%6d %6d %6d %6d %24.15f\n", ii, j, i, itr_j, matrix.val[itr_j]); // Print symmetric entry
+            }
+            // TODO: Are diagonal entries not being printed?
+        }
+    }
+    fclose(file_handle);
+
+    return;
 }
 
 /* ---------------------------------------------------------------------- */
