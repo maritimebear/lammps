@@ -682,12 +682,12 @@ void FixQEqReaxFF::compute_H()
   for (ii = 0; ii < nn; ii++) {
     i = ilist[ii];
     if (mask[i] & groupbit) {
-      jlist = firstneigh[i];
+      jlist = firstneigh[i]; // jlist: pointer to start of array of neighbour atom indices
       jnum = numneigh[i];
       H.firstnbr[i] = m_fill;
 
       for (jj = 0; jj < jnum; jj++) {
-        j = jlist[jj];
+        j = jlist[jj]; // j: index of neighbour atom, contains additional information removed by NEIGHMASK -- https://docs.lammps.org/Developer_write_pair.html
         j &= NEIGHMASK;
 
         dx = x[j][0] - x[i][0];
@@ -710,7 +710,7 @@ void FixQEqReaxFF::compute_H()
         }
 
         if (flag) {
-          H.jlist[m_fill] = j;
+          H.jlist[m_fill] = j; // index of last flagged neighbour atom?
           H.val[m_fill] = calculate_H(sqrt(r_sqr), shld[type[i]][type[j]]);
           m_fill++;
         }

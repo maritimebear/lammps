@@ -659,14 +659,14 @@ void FixACKS2ReaxFF::sparse_matvec_acks2(sparse_matrix *H, sparse_matrix *X, dou
       for (itr_j=H->firstnbr[i]; itr_j<H->firstnbr[i]+H->numnbrs[i]; itr_j++) {
         j = H->jlist[itr_j];
         b[i] += H->val[itr_j] * x[j];
-        b[j] += H->val[itr_j] * x[i];
+        b[j] += H->val[itr_j] * x[i]; // Symmetric entry
       }
 
       // X Matrix
       for (itr_j=X->firstnbr[i]; itr_j<X->firstnbr[i]+X->numnbrs[i]; itr_j++) {
         j = X->jlist[itr_j];
         b[NN + i] += X->val[itr_j] * x[NN + j];
-        b[NN + j] += X->val[itr_j] * x[NN + i];
+        b[NN + j] += X->val[itr_j] * x[NN + i]; // Symmetric entry
       }
 
       // Identity Matrix
@@ -978,6 +978,12 @@ double FixACKS2ReaxFF::parallel_dot(double *v1, double *v2, int n)
   }
 
   MPI_Allreduce(&my_dot, &res, 1, MPI_DOUBLE, MPI_SUM, world);
+
+  // if (comm->me == 0) {
+  //     if (fabs(res) <= 1e-14) {
+  //         error->warning(FLERR, "Dot product less than threshold: <v1, v2> = {:.8}", res);
+  //     }
+  // }
 
   return res;
 }
