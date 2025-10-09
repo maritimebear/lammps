@@ -168,7 +168,7 @@ void FixACKS2ReaxFF::pertype_parameters(char *arg)
       if (values.count() != 1)
         throw TokenizerException("Fix acks2/reaxff: Incorrect parameter file format","");
 
-      bond_softness = values.next_double();
+      bond_softness = values.next_double(); // Lambda in Koski paper
 
       for (int i = 1; i <= ntypes; i++) {
         const char *line = reader.next_line();
@@ -187,7 +187,7 @@ void FixACKS2ReaxFF::pertype_parameters(char *arg)
         chi[itype] = values.next_double();
         eta[itype] = values.next_double();
         gamma[itype] = values.next_double();
-        bcut_acks2[itype] = values.next_double();
+        bcut_acks2[itype] = values.next_double(); // sigma_i in Koski paper
       }
     } catch (std::exception &e) {
       error->one(FLERR,e.what());
@@ -300,7 +300,7 @@ void FixACKS2ReaxFF::init_bondcut()
 
   for (i = 1; i <= ntypes; ++i)
     for (j = 1; j <= ntypes; ++j) {
-      bcut[i][j] = 0.5*(bcut_acks2[i] + bcut_acks2[j]);
+      bcut[i][j] = 0.5*(bcut_acks2[i] + bcut_acks2[j]); // sigma_{ij} in Koski paper, used in calculating elements of X matrix
     }
 }
 
@@ -473,7 +473,7 @@ void FixACKS2ReaxFF::compute_X()
         }
 
         if (flag) {
-          double bcutoff = bcut[type[i]][type[j]];
+          double bcutoff = bcut[type[i]][type[j]]; // sigma_{ij} in Koski paper
           double bcutoff2 = bcutoff*bcutoff;
           if (r_sqr <= bcutoff2) {
             X.jlist[m_fill] = j;
