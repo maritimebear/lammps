@@ -359,8 +359,8 @@ void FixACKS2ReaxFF::pre_force(int /*vflag*/)
   init_matvec();
 
   // Print linear system before BiCGStab // TODO: Remove
-  print_sparse_matrix(this->H, "H");
-  print_sparse_matrix(this->X, "X");
+  print_sparse_matrix(this->H, append_timestep("H."));
+  print_sparse_matrix(this->X, append_timestep("X."));
 
   matvecs = BiCGStab(b_s, s); // BiCGStab on s - parallel
 
@@ -691,18 +691,23 @@ void FixACKS2ReaxFF::sparse_matvec_acks2(sparse_matrix *H, sparse_matrix *X, dou
 
 /* ---------------------------------------------------------------------- */
 
-void FixACKS2ReaxFF::print_sparse_matrix(sparse_matrix& matrix, const std::string& matrix_name) {
+std::string FixACKS2ReaxFF::append_timestep(const std::string& s) {
+    // Append current timestep to string s
+    std::stringstream result;
+    result << s << update->ntimestep;
+    return result.str();
+}
+
+/* ---------------------------------------------------------------------- */
+
+void FixACKS2ReaxFF::print_sparse_matrix(sparse_matrix& matrix, const std::string& filename) {
     // Print sparse matrix to text file
     // Unpacks CSR format, prints matrix elements with row and column indices
     // Based on FixACKS2ReaxFF::sparse_matvec_acks2() and PuReMD Print_Sparse_Matrix2()
 
     int ii, i, j, itr_j;
 
-    // Assemble output filename: append current timestep to matrix_name
-    std::stringstream filename;
-    filename << matrix_name << "." << update->ntimestep;
-
-    FILE* file_handle = fopen(filename.str().c_str(), "w");
+    FILE* file_handle = fopen(filename.c_str(), "w");
 
     // Header
     fprintf(file_handle, "%6s %6s %6s %6s %24s\n", "ii", "i", "j", "itr_j", "val[itr_j]");

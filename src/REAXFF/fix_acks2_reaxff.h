@@ -69,6 +69,7 @@ class FixACKS2ReaxFF : public FixQEqReaxFF {
   int BiCGStab(double *, double *);
   void sparse_matvec_acks2(sparse_matrix *, sparse_matrix *, double *, double *);
 
+  std::string append_timestep(const std::string&);
   void print_sparse_matrix(sparse_matrix&, const std::string&); // TODO: Remove after debugging ACKS2?
 
   int pack_forward_comm(int, int *, double *, int, int *) override;
