@@ -71,6 +71,7 @@ class FixACKS2ReaxFF : public FixQEqReaxFF {
 
   std::string append_timestep(const std::string&);
   void print_sparse_matrix(sparse_matrix&, const std::string&); // TODO: Remove after debugging ACKS2?
+  void print_matrix_diagonals();
   void print_array(double*, int, const std::string&);
 
   int pack_forward_comm(int, int *, double *, int, int *) override;

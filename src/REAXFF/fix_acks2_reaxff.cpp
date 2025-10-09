@@ -361,6 +361,7 @@ void FixACKS2ReaxFF::pre_force(int /*vflag*/)
   // Print linear system before BiCGStab // TODO: Remove
   print_sparse_matrix(this->H, append_timestep("H."));
   print_sparse_matrix(this->X, append_timestep("X."));
+  print_matrix_diagonals();
   print_array(b_s, nn, append_timestep("rhs."));
   print_array(s, nn, append_timestep("solution_pre."));
 
@@ -722,13 +723,45 @@ void FixACKS2ReaxFF::print_sparse_matrix(sparse_matrix& matrix, const std::strin
             for (itr_j = matrix.firstnbr[i]; itr_j < matrix.firstnbr[i] + matrix.numnbrs[i]; ++itr_j) {
                 j = matrix.jlist[itr_j];
                 fprintf(file_handle, "%6d %6d %6d %6d %6d %6d %24.15f\n", ii, i, j, itr_j, atom->tag[i], atom->tag[j], matrix.val[itr_j]);
-                // fprintf(file_handle, "%6d %6d %6d %6d %24.15f\n", ii, j, i, itr_j, matrix.val[itr_j]); // Print symmetric entry
+                fprintf(file_handle, "%6d %6d %6d %6d %6d %6d %24.15f\n", ii, j, i, itr_j, atom->tag[j], atom->tag[i], matrix.val[itr_j]); // Print symmetric entry
             }
-            // TODO: Are diagonal entries not being printed?
+            // Diagonal entries are stored separately: H diagonal in eta, X diagonal in X_diag
+            // Diagonals printed by print_matrix_diagonals()
         }
     }
     fclose(file_handle);
 
+    return;
+}
+
+/* ---------------------------------------------------------------------- */
+
+void FixACKS2ReaxFF::print_matrix_diagonals() {
+    // Print diagonal entries of linear system matrices
+    // Diagonal entries are stored separately: H diagonal in eta, X diagonal in X_diag
+    // Based on FixACKS2ReaxFF::sparse_matvec_acks2()
+
+    int ii, i, id;
+    FILE* handle_Hdiag = fopen(append_timestep("H_diag.").c_str(), "w");
+    FILE* handle_Xdiag = fopen(append_timestep("X_diag.").c_str(), "w");
+
+    // Headers
+    fprintf(handle_Hdiag, "%6s %6s %6s %24s\n", "ii", "i", "id", "val");
+    fprintf(handle_Xdiag, "%6s %6s %6s %24s\n", "ii", "i", "id", "val");
+
+    for (ii = 0; ii < nn; ++ii) {
+        i = ilist[ii];
+        if (atom->mask[i] & groupbit) {
+            id = atom->tag[i];
+            // Print QEq part first
+            fprintf(handle_Hdiag, "%6d %6d %6d %24.15f\n", ii, i, id, eta[atom->type[i]]);
+            // Print ACKS2 part second
+            fprintf(handle_Xdiag, "%6d %6d %6d %24.15f\n", ii, NN + i, id, X_diag[i]);
+        }
+    }
+
+    fclose(handle_Hdiag);
+    fclose(handle_Xdiag);
     return;
 }
 
