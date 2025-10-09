@@ -361,8 +361,12 @@ void FixACKS2ReaxFF::pre_force(int /*vflag*/)
   // Print linear system before BiCGStab // TODO: Remove
   print_sparse_matrix(this->H, append_timestep("H."));
   print_sparse_matrix(this->X, append_timestep("X."));
+  print_array(b_s, nn, append_timestep("rhs."));
+  print_array(s, nn, append_timestep("solution_pre."));
 
   matvecs = BiCGStab(b_s, s); // BiCGStab on s - parallel
+
+  print_array(s, nn, append_timestep("solution_post."));
 
   calculate_Q();
 }
@@ -725,6 +729,43 @@ void FixACKS2ReaxFF::print_sparse_matrix(sparse_matrix& matrix, const std::strin
     }
     fclose(file_handle);
 
+    return;
+}
+
+/* ---------------------------------------------------------------------- */
+
+void FixACKS2ReaxFF::print_array(double* array, int idx_top, const std::string& filename) {
+    // Print array to text file
+    // Based on FixACKS2ReaxFF::vector_sum()
+    int ii, i;
+    FILE* file_handle = fopen(filename.c_str(), "w");
+
+    // Header
+    fprintf(file_handle, "%6s %6s %24s\n", "ii", "i", "val");
+
+    // Print QEq part first
+    ii = idx_top - 1;
+    for (; ii >= 0; --ii) {
+        i = ilist[ii];
+        if (atom->mask[i] & groupbit) {
+            fprintf(file_handle, "%6d %6d %24.15f\n", ii, i, array[i]);
+        }
+    }
+    // Print ACKS2 part second
+    ii = idx_top - 1;
+    for (; ii >= 0; --ii) {
+        i = ilist[ii];
+        if (atom->mask[i] & groupbit) {
+            fprintf(file_handle, "%6d %6d %24.15f\n", ii, NN + i, array[NN + i]);
+        }
+    }
+    // Last two rows
+    if (last_rows_flag) {
+        fprintf(file_handle, "%6d %6d %24.15f\n", -2, 2*NN, array[2*NN]);
+        fprintf(file_handle, "%6d %6d %24.15f\n", -1, 2*NN + 1, array[2*NN + 1]);
+    }
+
+    fclose(file_handle);
     return;
 }
 
