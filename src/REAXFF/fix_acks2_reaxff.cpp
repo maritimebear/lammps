@@ -714,14 +714,14 @@ void FixACKS2ReaxFF::print_sparse_matrix(sparse_matrix& matrix, const std::strin
     FILE* file_handle = fopen(filename.c_str(), "w");
 
     // Header
-    fprintf(file_handle, "%6s %6s %6s %6s %24s\n", "ii", "i", "j", "itr_j", "val[itr_j]");
+    fprintf(file_handle, "%6s %6s %6s %6s %6s %6s %24s\n", "ii", "i", "j", "itr_j", "id_i", "id_j", "val[itr_j]");
 
     for (ii = 0; ii < nn; ++ii) {
         i = ilist[ii];
         if (atom->mask[i] & groupbit) {
             for (itr_j = matrix.firstnbr[i]; itr_j < matrix.firstnbr[i] + matrix.numnbrs[i]; ++itr_j) {
                 j = matrix.jlist[itr_j];
-                fprintf(file_handle, "%6d %6d %6d %6d %24.15f\n", ii, i, j, itr_j, matrix.val[itr_j]);
+                fprintf(file_handle, "%6d %6d %6d %6d %6d %6d %24.15f\n", ii, i, j, itr_j, atom->tag[i], atom->tag[j], matrix.val[itr_j]);
                 // fprintf(file_handle, "%6d %6d %6d %6d %24.15f\n", ii, j, i, itr_j, matrix.val[itr_j]); // Print symmetric entry
             }
             // TODO: Are diagonal entries not being printed?
