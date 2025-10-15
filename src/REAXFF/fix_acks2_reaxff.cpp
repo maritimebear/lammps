@@ -797,7 +797,7 @@ void FixACKS2ReaxFF::print_array(double* array, int idx_top, const std::string& 
     // Last two rows
     if (last_rows_flag) {
         fprintf(file_handle, "%6d %6d %6d %24.15f\n", -2, 2*NN, -2, array[2*NN]);
-        fprintf(file_handle, "%6d %6d %6d %24.15f\n", -1, 2*NN + 1, -2, array[2*NN + 1]);
+        fprintf(file_handle, "%6d %6d %6d %24.15f\n", -1, 2*NN + 1, -1, array[2*NN + 1]);
     }
 
     fclose(file_handle);
