@@ -575,6 +575,11 @@ int FixACKS2ReaxFF::BiCGStab(double *b, double *x)
     more_reverse_comm(z);
 
     tmp = parallel_dot(r_hat, z, nn);
+    if (fabs(tmp) < 1e-16) {
+        error->warning(FLERR,"Fix acks2/reaxff BiCGStab numerical breakdown, <r_hat, z> = {:.8}, ||r_hat|| = {:.8}, ||z|| = {:.8}",
+                      tmp, parallel_norm(r_hat, nn), parallel_norm(z, nn));
+        break;
+    }
     alpha = rho / tmp;
 
     vector_sum(q , 1., r, -alpha, z, nn);
