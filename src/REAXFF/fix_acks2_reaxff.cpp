@@ -584,7 +584,7 @@ int FixACKS2ReaxFF::BiCGStab(double *b, double *x)
 
     vector_sum(q , 1., r, -alpha, z, nn);
 
-    tmp = parallel_dot(q, q, nn);
+    tmp = parallel_dot(q, q, nn); // TODO Should this be a norm instead of an inner product? scipy uses norm?
 
     // early convergence check
     if (tmp < tolerance) {
