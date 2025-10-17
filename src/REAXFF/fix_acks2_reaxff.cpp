@@ -524,23 +524,23 @@ int FixACKS2ReaxFF::BiCGStab(double *b, double *x)
   double zero_threshold = 1e-32; // Compare fabs(float) to this number instead of if float == 0
                                  // scipy.sparse.linalg.bicgstab() uses 4.930380657631324e-32, "rhotol"
 
-  sparse_matvec_acks2(&H, &X, x, d);
+  sparse_matvec_acks2(&H, &X, x, d); // void sparse_matvec_acks2(sparse_matrix *H, sparse_matrix *X, double *x, double *b); b <- Ax
   pack_flag = 1;
   comm->reverse_comm(this); //Coll_Vector(d);
   more_reverse_comm(d);
 
-  vector_sum(r , 1.,  b, -1., d, nn);
-  bnorm = parallel_norm(b, nn);
+  vector_sum(r , 1.,  b, -1., d, nn); // void vector_sum(double* dest, double c, double* v, double d, double* y, int k); dest <- cv + dy
+  bnorm = parallel_norm(b, nn); // double parallel_norm(double *v, int n)
   rnorm = parallel_norm(r, nn);
 
   // if (bnorm == 0.0) bnorm = 1.0;
   if (fabs(bnorm) < zero_threshold) bnorm = 1.0;
-  vector_copy(r_hat, r, nn);
+  vector_copy(r_hat, r, nn); // void vector_copy(double* dest, double* v, int k); dest <- v
   omega = 1.0;
   rho = 1.0;
 
   for (i = 1; i < imax && rnorm / bnorm > tolerance; ++i) {
-    rho = parallel_dot(r_hat, r, nn);
+    rho = parallel_dot(r_hat, r, nn); // double parallel_dot(double* v1, double* v2, int n)
     // if (rho == 0.0) break;
     if (fabs(rho) < zero_threshold) break;
 
@@ -588,7 +588,7 @@ int FixACKS2ReaxFF::BiCGStab(double *b, double *x)
 
     // early convergence check
     if (tmp < tolerance) {
-      vector_add(x, alpha, d, nn);
+      vector_add(x, alpha, d, nn); // void vector_add(double* dest, double c, double* v, int k); dest <- dest + cv
       break;
     }
 
