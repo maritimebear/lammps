@@ -54,6 +54,8 @@ class FixACKS2ReaxFF : public FixQEqReaxFF {
   //BiCGStab storage
   double *g, *q_hat, *r_hat, *y, *z;
 
+  // TODO remove test/debug variables
+  bool print_system;
   void pertype_parameters(char *) override;
   void init_bondcut();
   void allocate_storage() override;

@@ -85,6 +85,9 @@ FixACKS2ReaxFF::FixACKS2ReaxFF(LAMMPS *lmp, int narg, char **arg) :
 
   if (dual_enabled)
     error->all(FLERR, Error::NOLASTLINE, "Dual keyword only supported with fix qeq/reax/omp");
+
+  // TODO remove test/debug variables
+  print_system = true;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -359,15 +362,19 @@ void FixACKS2ReaxFF::pre_force(int /*vflag*/)
   init_matvec();
 
   // Print linear system before BiCGStab // TODO: Remove
-  print_sparse_matrix(this->H, append_timestep("H."));
-  print_sparse_matrix(this->X, append_timestep("X."));
-  print_matrix_diagonals();
-  print_array(b_s, nn, append_timestep("rhs."));
-  print_array(s, nn, append_timestep("solution_pre."));
+  if (print_system) {
+      print_sparse_matrix(this->H, append_timestep("H."));
+      print_sparse_matrix(this->X, append_timestep("X."));
+      print_matrix_diagonals();
+      print_array(b_s, nn, append_timestep("rhs."));
+      print_array(s, nn, append_timestep("solution_pre."));
+  }
 
   matvecs = BiCGStab(b_s, s); // BiCGStab on s - parallel
 
-  print_array(s, nn, append_timestep("solution_post."));
+  if (print_system) {
+      print_array(s, nn, append_timestep("solution_post."));
+  }
 
   calculate_Q();
 }
