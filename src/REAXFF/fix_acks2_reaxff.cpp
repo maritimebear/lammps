@@ -88,6 +88,9 @@ FixACKS2ReaxFF::FixACKS2ReaxFF(LAMMPS *lmp, int narg, char **arg) :
 
   // TODO remove test/debug variables
   print_system = true;
+  vec_b_s = {};
+  vec_s = {};
+
 }
 
 /* ---------------------------------------------------------------------- */
@@ -237,6 +240,10 @@ void FixACKS2ReaxFF::allocate_storage()
   memory->create(r_hat,size,"acks2:r_hat");
   memory->create(y,size,"acks2:y");
   memory->create(z,size,"acks2:z");
+
+  // TODO remove test/debug variables
+  vec_b_s.resize(size, 0.0);
+  vec_s.resize(size, 0.0);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -433,6 +440,19 @@ void FixACKS2ReaxFF::init_matvec() // Calculates pre-conditioner entries, pre-co
   pack_flag = 2;
   comm->forward_comm(this); //Dist_vector(s);
   more_forward_comm(s);
+
+  // TODO cleanup
+  // Copy arrays into vectors
+  int n_values_b_s = copy_array_to_vector(b_s, vec_b_s);
+  int n_values_s = copy_array_to_vector(s, vec_s);
+  // Check if arrays and vectors are EQUAL
+  if (!array_vec_equal(b_s, vec_b_s)) {
+      error->all(FLERR, Error::NOLASTLINE, "b_s != vec_b_s");
+  }
+  if (!array_vec_equal(s, vec_s)) {
+      error->all(FLERR, Error::NOLASTLINE, "s != vec_s");
+  }
+
 }
 
 /* ---------------------------------------------------------------------- */
@@ -817,6 +837,50 @@ void FixACKS2ReaxFF::print_array(double* array, int idx_top, const std::string& 
     return;
 }
 
+/* ---------------------------------------------------------------------- */
+
+int FixACKS2ReaxFF::copy_array_to_vector(double* array, std::vector<double>& vec) {
+    // Copy b_s and s into vec_b_s and vec_s
+    // Returns number of values copied, for testing/understanding LAMMPS data structures
+    int count = 0;
+    for (int ii = 0; ii < NN; ii++) {
+	int i = ilist[ii];
+	if (atom->mask[i] & groupbit) {
+	    vec[i] = array[i];
+	    ++count;
+	    vec[NN + i] = array[NN + i];
+	    ++count;
+	}
+    }
+    // Last two rows
+    for (int i = 0; i < 2; ++i) {
+	vec[2*NN + i] = array[2*NN + i];
+	++count;
+    }
+    return count;
+}
+
+/* ---------------------------------------------------------------------- */
+
+bool FixACKS2ReaxFF::array_vec_equal(double* array, const std::vector<double>& vec) {
+    // Checks for EQUALITY between array and vec elements
+    // Returns true if all elements equal, else false
+    // Intended to compare b_s, s to vec_b_s, s
+    for (int ii = 0; ii < NN; ii++) {
+	int i = ilist[ii];
+	if (atom->mask[i] & groupbit) {
+	    if (vec[i] != array[i]) return false;
+	    if (vec[NN + i] != array[NN + i]) return false;
+	}
+    }
+
+    // Last two rows
+    for (int i = 0; i < 2; ++i) {
+	if (vec[2*NN + i] != array[2*NN + i]) return false;
+    }
+
+    return true;
+}
 /* ---------------------------------------------------------------------- */
 
 void FixACKS2ReaxFF::calculate_Q()

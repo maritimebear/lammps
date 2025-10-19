@@ -24,6 +24,7 @@ FixStyle(acks2/reaxff,FixACKS2ReaxFF);
 #include "fix_qeq_reaxff.h"
 
 #include <sstream>
+#include <vector>
 
 namespace LAMMPS_NS {
 
@@ -56,6 +57,9 @@ class FixACKS2ReaxFF : public FixQEqReaxFF {
 
   // TODO remove test/debug variables
   bool print_system;
+  std::vector<double> vec_b_s;
+  std::vector<double> vec_s;
+
   void pertype_parameters(char *) override;
   void init_bondcut();
   void allocate_storage() override;
@@ -75,6 +79,8 @@ class FixACKS2ReaxFF : public FixQEqReaxFF {
   void print_sparse_matrix(sparse_matrix&, const std::string&); // TODO: Remove after debugging ACKS2?
   void print_matrix_diagonals();
   void print_array(double*, int, const std::string&);
+  int copy_array_to_vector(double* , std::vector<double>&);
+  bool array_vec_equal(double*, const std::vector<double>&);
 
   int pack_forward_comm(int, int *, double *, int, int *) override;
   void unpack_forward_comm(int, int, double *) override;
