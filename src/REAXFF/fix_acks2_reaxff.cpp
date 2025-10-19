@@ -842,19 +842,20 @@ void FixACKS2ReaxFF::print_array(double* array, int idx_top, const std::string& 
 int FixACKS2ReaxFF::copy_array_to_vector(double* array, std::vector<double>& vec) {
     // Copy b_s and s into vec_b_s and vec_s
     // Returns number of values copied, for testing/understanding LAMMPS data structures
+    // uses std::vector::at(), i.e. performs bounds checking
     int count = 0;
     for (int ii = 0; ii < NN; ii++) {
 	int i = ilist[ii];
 	if (atom->mask[i] & groupbit) {
-	    vec[i] = array[i];
+	    vec.at(i) = array[i];
 	    ++count;
-	    vec[NN + i] = array[NN + i];
+	    vec.at(NN + i) = array[NN + i];
 	    ++count;
 	}
     }
     // Last two rows
     for (int i = 0; i < 2; ++i) {
-	vec[2*NN + i] = array[2*NN + i];
+	vec.at(2*NN + i) = array[2*NN + i];
 	++count;
     }
     return count;
@@ -869,14 +870,14 @@ bool FixACKS2ReaxFF::array_vec_equal(double* array, const std::vector<double>& v
     for (int ii = 0; ii < NN; ii++) {
 	int i = ilist[ii];
 	if (atom->mask[i] & groupbit) {
-	    if (vec[i] != array[i]) return false;
-	    if (vec[NN + i] != array[NN + i]) return false;
+	    if (vec.at(i) != array[i]) return false;
+	    if (vec.at(NN + i) != array[NN + i]) return false;
 	}
     }
 
     // Last two rows
     for (int i = 0; i < 2; ++i) {
-	if (vec[2*NN + i] != array[2*NN + i]) return false;
+	if (vec.at(2*NN + i) != array[2*NN + i]) return false;
     }
 
     return true;
