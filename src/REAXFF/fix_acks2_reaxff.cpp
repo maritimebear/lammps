@@ -845,18 +845,18 @@ int FixACKS2ReaxFF::copy_array_to_vector(double* array, std::vector<double>& vec
     // uses std::vector::at(), i.e. performs bounds checking
     int count = 0;
     for (int ii = 0; ii < NN; ii++) {
-	int i = ilist[ii];
-	if (atom->mask[i] & groupbit) {
-	    vec.at(i) = array[i];
-	    ++count;
-	    vec.at(NN + i) = array[NN + i];
-	    ++count;
-	}
+        int i = ilist[ii];
+        if (atom->mask[i] & groupbit) {
+            vec.at(i) = array[i];
+            ++count;
+            vec.at(NN + i) = array[NN + i];
+            ++count;
+        }
     }
     // Last two rows
     for (int i = 0; i < 2; ++i) {
-	vec.at(2*NN + i) = array[2*NN + i];
-	++count;
+        vec.at(2*NN + i) = array[2*NN + i];
+        ++count;
     }
     return count;
 }
@@ -868,16 +868,16 @@ bool FixACKS2ReaxFF::array_vec_equal(double* array, const std::vector<double>& v
     // Returns true if all elements equal, else false
     // Intended to compare b_s, s to vec_b_s, s
     for (int ii = 0; ii < NN; ii++) {
-	int i = ilist[ii];
-	if (atom->mask[i] & groupbit) {
-	    if (vec.at(i) != array[i]) return false;
-	    if (vec.at(NN + i) != array[NN + i]) return false;
-	}
+        int i = ilist[ii];
+        if (atom->mask[i] & groupbit) {
+            if (vec.at(i) != array[i]) return false;
+            if (vec.at(NN + i) != array[NN + i]) return false;
+        }
     }
 
     // Last two rows
     for (int i = 0; i < 2; ++i) {
-	if (vec.at(2*NN + i) != array[2*NN + i]) return false;
+        if (vec.at(2*NN + i) != array[2*NN + i]) return false;
     }
 
     return true;
