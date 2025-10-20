@@ -25,6 +25,7 @@ FixStyle(acks2/reaxff,FixACKS2ReaxFF);
 
 #include <sstream>
 #include <vector>
+#include <iostream> // TODO remove after testing, only for std::cout
 
 namespace LAMMPS_NS {
 
@@ -42,7 +43,8 @@ class FixACKS2ReaxFF : public FixQEqReaxFF {
   double compute_scalar() override;
 
  protected:
-  int NN, last_rows_rank, last_rows_flag;
+  int NN; // number of local owned atoms + number of local ghost atoms
+  int last_rows_rank, last_rows_flag;
 
   double **s_hist_X, **s_hist_last;
   double *bcut_acks2, bond_softness, **bcut;    // acks2 parameters
@@ -92,6 +94,17 @@ class FixACKS2ReaxFF : public FixQEqReaxFF {
 
   bool array_vec_equal(double*, const std::vector<double>&);
   bool diag_vec_equal(double*, const std::vector<double>&);
+
+// TODO: Functions to test understanding, cleanup afterwards
+  void print_MPI_rank();
+  std::vector<double> create_local_rhs(size_t);
+
+  template<typename T>
+  void print_vector(const std::vector<T>& vec) {
+      for (size_t i = 0; i < vec.size(); ++i) {
+          std::cout << "i: " << i << "\tvalue: " << vec[i] << "\n";
+      }
+  }
 
   int pack_forward_comm(int, int *, double *, int, int *) override;
   void unpack_forward_comm(int, int, double *) override;

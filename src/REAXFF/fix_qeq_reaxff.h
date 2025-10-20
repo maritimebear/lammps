@@ -59,14 +59,16 @@ class FixQEqReaxFF : public Fix {
  protected:
   int nevery, reaxflag;
   int matvecs;
-  int nn, m_fill;
+  int nn; // number of neighbour lists == number of local atoms
+  int m_fill;
   int n_cap, nmax, m_cap;
   int pack_flag;
   int nlevels_respa;
   class NeighList *list;
   class PairReaxFF *reaxff;
   class FixEfield *efield;
-  int *ilist, *jlist, *numneigh, **firstneigh;
+  int *ilist; // Array of (apparently global) indices of atoms for which neighbour lists have been created
+  int *jlist, *numneigh, **firstneigh;
 
   double swa, swb;     // lower/upper Taper cutoff radius
   double Tap[8];       // Taper function

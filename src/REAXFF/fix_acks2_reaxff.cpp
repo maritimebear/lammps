@@ -95,6 +95,7 @@ FixACKS2ReaxFF::FixACKS2ReaxFF(LAMMPS *lmp, int narg, char **arg) :
   vec_X_diag = {};
   vec_Xdia_inv = {};
 
+  print_MPI_rank();
 }
 
 /* ---------------------------------------------------------------------- */
@@ -324,7 +325,7 @@ void FixACKS2ReaxFF::init_bondcut()
 
 /* ---------------------------------------------------------------------- */
 
-void FixACKS2ReaxFF::init_storage()
+void FixACKS2ReaxFF::init_storage() // Initialises solution and rhs arrays for owned and ghost atoms
 {
   if (efield) get_chi_field();
 
@@ -427,7 +428,7 @@ void FixACKS2ReaxFF::init_matvec() // Calculates pre-conditioner entries, pre-co
 
       /* init pre-conditioner for H and init solution vectors */
       Hdia_inv[i] = 1. / eta[atom->type[i]];
-      b_s[i] = -chi[atom->type[i]];
+      b_s[i] = -chi[atom->type[i]]; // This seems to be done in order to account for changes to chi due to efield
       if (efield) b_s[i] -= chi_field[i];
       b_s[NN+i] = 0.0;
 
@@ -455,6 +456,7 @@ void FixACKS2ReaxFF::init_matvec() // Calculates pre-conditioner entries, pre-co
   int n_values_s = copy_array_to_vector(s, vec_s);
 
   // printf("\nn_values_s: %d, nmax*2+2: %d, s.size: %ld\n", n_values_s, (atom->nmax*2 + 2), vec_s.size());
+  // printf("\n nn: %d, NN: %d, nvalues_s: %d, s.size: %ld \n", nn, NN, n_values_s, vec_s.size());
 
   // Check if arrays and vectors are EQUAL
   if (!array_vec_equal(b_s, vec_b_s)) {
@@ -481,6 +483,20 @@ void FixACKS2ReaxFF::init_matvec() // Calculates pre-conditioner entries, pre-co
   if (!diag_vec_equal(Xdia_inv, vec_Xdia_inv)) {
       error->all(FLERR, Error::NOLASTLINE, "Xdia_inv != vec_Xdia_inv");
   }
+
+  // TODO: Cleanup after testing
+
+  // OK
+  std::vector<double> test_local_rhs = create_local_rhs(nn);
+  for (size_t i = 0; i < test_local_rhs.size(); ++i) {
+      if (test_local_rhs[i] != vec_b_s[i]) {
+          printf("i: %ld, test_local_rhs[i]: %f, vec_b_s[i]: %f\n", i, test_local_rhs[i], vec_b_s[i]);
+          error->all(FLERR, Error::NOLASTLINE, "test_local_rhs != vec_b_s");
+      }
+  }
+
+  printf("nn: %d, NN: %d\n", nn, NN);
+  print_vector(vec_b_s);
 
 }
 
@@ -780,7 +796,7 @@ void FixACKS2ReaxFF::print_sparse_matrix(sparse_matrix& matrix, const std::strin
     fprintf(file_handle, "%6s %6s %6s %6s %6s %6s %24s\n", "ii", "i", "j", "itr_j", "id_i", "id_j", "val[itr_j]");
 
     for (ii = 0; ii < nn; ++ii) {
-        i = ilist[ii];
+        i = ilist[ii]; // i = global index of locally-owned atom
         if (atom->mask[i] & groupbit) {
             for (itr_j = matrix.firstnbr[i]; itr_j < matrix.firstnbr[i] + matrix.numnbrs[i]; ++itr_j) {
                 j = matrix.jlist[itr_j];
@@ -1367,5 +1383,36 @@ void FixACKS2ReaxFF::vector_copy(double* dest, double* v, int k)
     dest[2*NN] = v[2*NN];
     dest[2*NN + 1] = v[2*NN + 1];
   }
+}
+
+/* ---------------------------------------------------------------------- */
+
+// TODO: Functions to test understanding, cleanup afterwards
+
+void FixACKS2ReaxFF::print_MPI_rank() {
+    int rank, max_len;
+    char processorname[MPI_MAX_PROCESSOR_NAME];
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Get_processor_name(processorname, &max_len);
+    printf("MPI Process #: %d, on processor: %s\n", rank, processorname);
+}
+
+std::vector<double> FixACKS2ReaxFF::create_local_rhs(size_t local_size) {
+    // Returns ACKS2 system RHS vector
+
+    std::vector<double> rhs = std::vector<double>(local_size);
+    if (local_size != nn) error->all(FLERR, "local_size: %ld != nn: %d\n", local_size, nn);
+
+    if (efield) get_chi_field();
+
+    for (int idx_owned = 0; idx_owned < nn; ++idx_owned) {
+        int idx_global = ilist[idx_owned]; // Must not exceed local_size
+        if (atom->mask[idx_global] & groupbit) {
+            rhs.at(idx_global) = -chi[atom->type[idx_global]];
+            if (efield) rhs.at(idx_global) -= chi_field[idx_global];
+        }
+    }
+
+    return rhs;
 }
 
