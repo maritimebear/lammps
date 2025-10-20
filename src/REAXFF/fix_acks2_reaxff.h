@@ -59,6 +59,10 @@ class FixACKS2ReaxFF : public FixQEqReaxFF {
   bool print_system;
   std::vector<double> vec_b_s;
   std::vector<double> vec_s;
+  std::vector<double> vec_H_diag;
+  std::vector<double> vec_Hdia_inv;
+  std::vector<double> vec_X_diag;
+  std::vector<double> vec_Xdia_inv;
 
   void pertype_parameters(char *) override;
   void init_bondcut();
@@ -75,12 +79,19 @@ class FixACKS2ReaxFF : public FixQEqReaxFF {
   int BiCGStab(double *, double *);
   void sparse_matvec_acks2(sparse_matrix *, sparse_matrix *, double *, double *);
 
+  // TODO Cleanup
   std::string append_timestep(const std::string&);
   void print_sparse_matrix(sparse_matrix&, const std::string&); // TODO: Remove after debugging ACKS2?
   void print_matrix_diagonals();
   void print_array(double*, int, const std::string&);
   int copy_array_to_vector(double* , std::vector<double>&);
+  void copy_X_diag(std::vector<double>&);
+  void copy_Xdia_inv(std::vector<double>&);
+  int copy_H_diag(std::vector<double>&);
+  int copy_Hdia_inv(std::vector<double>&);
+
   bool array_vec_equal(double*, const std::vector<double>&);
+  bool diag_vec_equal(double*, const std::vector<double>&);
 
   int pack_forward_comm(int, int *, double *, int, int *) override;
   void unpack_forward_comm(int, int, double *) override;

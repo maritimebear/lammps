@@ -90,6 +90,10 @@ FixACKS2ReaxFF::FixACKS2ReaxFF(LAMMPS *lmp, int narg, char **arg) :
   print_system = false;
   vec_b_s = {};
   vec_s = {};
+  vec_H_diag = {};
+  vec_Hdia_inv = {};
+  vec_X_diag = {};
+  vec_Xdia_inv = {};
 
 }
 
@@ -244,6 +248,10 @@ void FixACKS2ReaxFF::allocate_storage()
   // TODO remove test/debug variables
   vec_b_s.resize(size, 0.0);
   vec_s.resize(size, 0.0);
+  vec_H_diag.resize(nmax, 0.0);
+  vec_Hdia_inv.resize(nmax, 0.0);
+  vec_X_diag.resize(nmax, 0.0);
+  vec_Xdia_inv.resize(nmax, 0.0);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -454,6 +462,24 @@ void FixACKS2ReaxFF::init_matvec() // Calculates pre-conditioner entries, pre-co
   }
   if (!array_vec_equal(s, vec_s)) {
       error->all(FLERR, Error::NOLASTLINE, "s != vec_s");
+  }
+
+  // Copy diagonals into vectors
+  int n_values_H_diag = copy_H_diag(vec_H_diag);
+  int n_values_Hdia_inv = copy_Hdia_inv(vec_Hdia_inv);
+  copy_X_diag(vec_X_diag);
+  copy_Xdia_inv(vec_Xdia_inv);
+
+  // Check diagonals copied
+  // Cannot directly check vec_H_diag: no H_diag array, values accessed by eta[atom->type[i]] instead of H_diag[i]
+  if (!diag_vec_equal(Hdia_inv, vec_Hdia_inv)) {
+      error->all(FLERR, Error::NOLASTLINE, "Hdia_inv != vec_Hdia_inv");
+  }
+  if (!diag_vec_equal(X_diag, vec_X_diag)) {
+      error->all(FLERR, Error::NOLASTLINE, "X_diag != vec_X_diag");
+  }
+  if (!diag_vec_equal(Xdia_inv, vec_Xdia_inv)) {
+      error->all(FLERR, Error::NOLASTLINE, "Xdia_inv != vec_Xdia_inv");
   }
 
 }
@@ -866,6 +892,52 @@ int FixACKS2ReaxFF::copy_array_to_vector(double* array, std::vector<double>& vec
 
 /* ---------------------------------------------------------------------- */
 
+void FixACKS2ReaxFF::copy_X_diag(std::vector<double>& vec) {
+    for (int i = 0; i < atom->nmax; ++i) {
+        vec.at(i) = X_diag[i];
+    }
+}
+
+/* ---------------------------------------------------------------------- */
+
+void FixACKS2ReaxFF::copy_Xdia_inv(std::vector<double>& vec) {
+    for (int i = 0; i < atom->nmax; ++i) {
+        vec.at(i) = Xdia_inv[i];
+    }
+}
+
+/* ---------------------------------------------------------------------- */
+
+int FixACKS2ReaxFF::copy_H_diag(std::vector<double>& vec) {
+    // Returns number of values copied, for testing/understanding LAMMPS data structures
+    int count = 0;
+    for (int ii = 0; ii < atom->nmax; ++ii) {
+        int i = ilist[ii];
+        if (atom->mask[i] & groupbit) {
+            vec.at(i) = eta[atom->type[i]];
+            ++count;
+        }
+    }
+    return count;
+}
+
+/* ---------------------------------------------------------------------- */
+
+int FixACKS2ReaxFF::copy_Hdia_inv(std::vector<double>& vec) {
+    // Returns number of values copied, for testing/understanding LAMMPS data structures
+    int count = 0;
+    for (int ii = 0; ii < atom->nmax; ++ii) {
+        int i = ilist[ii];
+        if (atom->mask[i] & groupbit) {
+            vec.at(i) = Hdia_inv[i];
+            ++count;
+        }
+    }
+    return count;
+}
+
+/* ---------------------------------------------------------------------- */
+
 bool FixACKS2ReaxFF::array_vec_equal(double* array, const std::vector<double>& vec) {
     // Checks for EQUALITY between array and vec elements
     // Returns true if all elements equal, else false
@@ -885,6 +957,20 @@ bool FixACKS2ReaxFF::array_vec_equal(double* array, const std::vector<double>& v
 
     return true;
 }
+
+/* ---------------------------------------------------------------------- */
+
+bool FixACKS2ReaxFF::diag_vec_equal(double* diag, const std::vector<double>& vec) {
+    // Checks diagonal arrays and vector elements for equality
+    // Returns true if all elements equal, else false
+    // Checks ALL elements : 0 to atom->nmax, no ilist, mask or groupbit stuff
+    // Intended to compare (Hdia_inv, vec_Hdia_inv), (X_diag, vec_X_diag) and (Xdia_inv, vec_Xdia_inv)
+    for (int i = 0; i < atom->nmax; ++i) {
+        if (vec.at(i) != diag[i]) return false;
+    }
+    return true;
+}
+
 /* ---------------------------------------------------------------------- */
 
 void FixACKS2ReaxFF::calculate_Q()
