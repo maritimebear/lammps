@@ -87,7 +87,7 @@ FixACKS2ReaxFF::FixACKS2ReaxFF(LAMMPS *lmp, int narg, char **arg) :
     error->all(FLERR, Error::NOLASTLINE, "Dual keyword only supported with fix qeq/reax/omp");
 
   // TODO remove test/debug variables
-  print_system = true;
+  print_system = false;
   vec_b_s = {};
   vec_s = {};
 
@@ -445,6 +445,9 @@ void FixACKS2ReaxFF::init_matvec() // Calculates pre-conditioner entries, pre-co
   // Copy arrays into vectors
   int n_values_b_s = copy_array_to_vector(b_s, vec_b_s);
   int n_values_s = copy_array_to_vector(s, vec_s);
+
+  // printf("\nn_values_s: %d, nmax*2+2: %d, s.size: %ld\n", n_values_s, (atom->nmax*2 + 2), vec_s.size());
+
   // Check if arrays and vectors are EQUAL
   if (!array_vec_equal(b_s, vec_b_s)) {
       error->all(FLERR, Error::NOLASTLINE, "b_s != vec_b_s");
