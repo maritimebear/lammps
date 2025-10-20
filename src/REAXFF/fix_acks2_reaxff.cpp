@@ -245,7 +245,7 @@ void FixACKS2ReaxFF::allocate_storage()
   memory->create(y,size,"acks2:y");
   memory->create(z,size,"acks2:z");
 
-  // TODO remove test/debug variables
+  // TODO Cleanup
   vec_b_s.resize(size, 0.0);
   vec_s.resize(size, 0.0);
   vec_H_diag.resize(nmax, 0.0);
