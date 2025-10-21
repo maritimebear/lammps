@@ -90,6 +90,10 @@ class FixACKS2ReaxFF : public FixQEqReaxFF {
   int copy_H_diag(std::vector<double>&);
   int copy_Hdia_inv(std::vector<double>&);
 
+  int ACKS2CG(double*, double*);
+  int ACKS2BiCGStab(double*, double*, double, int);
+  int RestartedBiCGStab(double*, double*, double, int);
+
   bool array_vec_equal(double*, const std::vector<double>&);
   bool diag_vec_equal(double*, const std::vector<double>&);
 

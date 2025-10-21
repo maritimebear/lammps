@@ -385,7 +385,10 @@ void FixACKS2ReaxFF::pre_force(int /*vflag*/)
       print_array(s, nn, append_timestep("solution_pre."));
   }
 
-  matvecs = BiCGStab(b_s, s); // BiCGStab on s - parallel
+  // matvecs = BiCGStab(b_s, s); // BiCGStab on s - parallel
+  matvecs = RestartedBiCGStab(b_s, s, 1e-32, 500);
+
+  // printf("CG iterations: %d\n", matvecs);
 
   if (print_system) {
       print_array(s, nn, append_timestep("solution_post."));
@@ -696,6 +699,250 @@ int FixACKS2ReaxFF::BiCGStab(double *b, double *x)
   }
 
   return i;
+}
+
+/* ---------------------------------------------------------------------- */
+
+int FixACKS2ReaxFF::RestartedBiCGStab(double* b, double* x, double rhotol, int restart_interval) {
+
+    int n_restarts = static_cast<int>(imax / restart_interval) + static_cast<int>(imax % restart_interval);
+    int n_iters_total = 0;
+
+    double xnorm_0 = parallel_norm(x, nn);
+    printf("xnorm_0: %f\n", xnorm_0);
+
+    for (int n = 0; n < n_restarts; ++n) {
+        // printf("n: %d\n", n);
+        int return_code = ACKS2BiCGStab(b, x, rhotol, restart_interval);
+        double xnorm = parallel_norm(x, nn);
+        printf("xnorm: %f\n", xnorm);
+        if (return_code == -1) {
+            n_iters_total += restart_interval;
+            continue;
+        } else {
+            n_iters_total += return_code;
+            return n_iters_total;
+        }
+    }
+
+    error->warning(FLERR,"Restarted BiCGStab failed to converge after {} x {} iterations, timestep {}", n_restarts, restart_interval, update->ntimestep);
+    return -1;
+}
+
+/* ---------------------------------------------------------------------- */
+
+int FixACKS2ReaxFF::ACKS2BiCGStab(double* b, double* x, double rhotol, int maxiters) {
+
+    int i = 0;
+
+    double rho = 0.0;
+    double beta = 0.0;
+    double alpha = 0.0;
+    double omega = 0.0;
+    double rho_old = 0.0;
+
+    double bnorm = parallel_norm(b, nn);
+    if (bnorm == 0.0) {
+        error->warning(FLERR, "BiCGStab(): ||b|| == 0.0, b == zero vector?");
+        return 0;
+    }
+
+    sparse_matvec_acks2(&H, &X, x, d);
+    pack_flag = 1;
+    comm->reverse_comm(this);
+    more_reverse_comm(d);
+
+    vector_sum(r, 1.0, b, -1.0, d, nn);
+
+    vector_copy(r_hat, r, nn); // Shadow residual
+
+    for (i = 1; i < maxiters; ++i) {
+        rho = parallel_dot(r_hat, r, nn);
+        if (fabs(rho) < rhotol) {
+            error->all(FLERR, Error::NOLASTLINE, "BiCGStab(): |rho| = {:.2} < rhotol = {:.2}", fabs(rho), rhotol);
+        }
+
+        if (i == 1) {
+            vector_copy(p, r, nn);
+        } else {
+            beta = (rho / rho_old) * (alpha / omega);
+            vector_sum(g, 1.0, p, -omega, z, nn);
+            vector_sum(p, 1.0, r, beta, g, nn);
+        }
+
+        // pre-conditioning
+        for (int jj = 0; jj < nn; ++jj) {
+            int j = ilist[jj];
+            if (atom->mask[j] & groupbit) {
+                d[j] = p[j] * Hdia_inv[j];
+                d[NN + j] = p[NN + j] * Xdia_inv[j];
+            }
+        }
+        // last two rows
+        if (last_rows_flag) {
+            d[2*NN] = p[2*NN];
+            d[2*NN + 1] = p[2*NN + 1];
+        }
+        pack_flag = 1;
+        comm->forward_comm(this);
+        more_forward_comm(d);
+
+        sparse_matvec_acks2(&H, &X, d, z);
+        pack_flag = 2;
+        comm->reverse_comm(this);
+        more_reverse_comm(z);
+
+        double rhat_z = parallel_dot(r_hat, z, nn);
+        if (fabs(rhat_z) < rhotol) {
+            error->all(FLERR, Error::NOLASTLINE, "BiCGStab(): <r_hat, z> = {:.2} < rhotol = {:.2}", rhat_z, rhotol);
+        }
+
+        alpha = rho / rhat_z;
+
+        vector_sum(q, 1.0, r, -alpha, z, nn);
+
+        double qnorm = parallel_norm(q, nn);
+        if (qnorm < tolerance) {
+            vector_add(x, alpha, d, nn);
+            return i;
+        }
+
+        // pre-conditioning
+        for(int jj = 0; jj < nn; ++jj) {
+            int j = ilist[jj];
+            if (atom->mask[j] & groupbit) {
+                q_hat[j] = q[j] * Hdia_inv[j];
+                q_hat[NN + j] = q[NN + j] * Xdia_inv[j];
+            }
+        }
+        // last two rows
+        if (last_rows_flag) {
+            q_hat[2*NN] = q[2*NN];
+            q_hat[2*NN + 1] = q[2*NN + 1];
+        }
+        pack_flag = 3;
+        comm->forward_comm(this);
+        more_forward_comm(q_hat);
+
+        sparse_matvec_acks2(&H, &X, q_hat, y);
+        pack_flag = 3;
+        comm->reverse_comm(this);
+        more_reverse_comm(y);
+
+        double y_q = parallel_dot(y, q, nn);
+        double y_y = parallel_dot(y, y, nn);
+        omega = y_q / y_y;
+        if (fabs(omega) < rhotol) {
+            error->all(FLERR, Error::NOLASTLINE, "BiCGStab(): |omega| = {:.2} < rhotol = {:.2}", fabs(omega), rhotol);
+        }
+
+        vector_add(x, alpha, d, nn);
+        vector_add(x, omega, q_hat, nn);
+
+        vector_sum(r, 1.0, q, -omega, y, nn);
+
+        double rnorm = parallel_norm(r, nn);
+        if (rnorm < tolerance) {
+            return i;
+        }
+
+        rho_old = rho;
+    }
+
+    // error->warning(FLERR, "BiCGStab() failed to converge in {} iterations, timestep: {}", i, update->ntimestep);
+    return -1;
+}
+
+/* ---------------------------------------------------------------------- */
+
+int FixACKS2ReaxFF::ACKS2CG(double* b, double* x) {
+    
+    /* z = Ax
+     * r_hat = r
+     * q_hat = z
+     * g = p
+     * y = q
+    */ 
+
+    int i = 0;
+    int j, jj;
+
+    double rho = 0.0;
+    double beta = 0.0;
+    double rho_old = 0.0;
+    double gy = 0.0;
+    double alpha = 0.0;
+    double rnorm = 0.0;
+    double bnorm = parallel_norm(b, nn);
+
+    // printf("CG bnorm: %f\n", bnorm);
+
+    sparse_matvec_acks2(&H, &X, x, z);
+    pack_flag = 1;
+    comm->reverse_comm(this); //Coll_Vector(d);
+    more_reverse_comm(z);
+
+    vector_sum(r_hat , 1.,  b, -1., z, nn);
+    // printf("\nCG initial ||r_hat||: %f\n\n", parallel_norm(r_hat, nn));
+
+    for (i = 1; i < imax; ++i) {
+
+        // pre-conditioning
+        for (jj = 0; jj < nn; ++jj) {
+          j = ilist[jj];
+          if (atom->mask[j] & groupbit) {
+            q_hat[j] = r_hat[j] * Hdia_inv[j];
+            q_hat[NN+j] = r_hat[NN+j] * Xdia_inv[j];
+          }
+        }
+        // last two rows
+        if (last_rows_flag) {
+          q_hat[2*NN] = r_hat[2*NN];
+          q_hat[2*NN + 1] = r_hat[2*NN + 1];
+        }
+        pack_flag = 3;
+        comm->forward_comm(this); //Dist_vector(q_hat);
+        more_forward_comm(q_hat);
+        // printf("CG ||q_hat||: %f\n", parallel_norm(q_hat, nn));
+
+        rho = parallel_dot(r_hat, q_hat, nn);
+        // printf("rho: %f\n", rho);
+
+        if (i == 1) {
+            vector_copy(g, q_hat, nn);
+        } else {
+            beta = rho / rho_old;
+            // printf("beta: %f\n", beta);
+            vector_sum(g, 1.0, q_hat, beta, g, nn);
+        }
+        // printf("CG ||g||: %f\n", parallel_norm(g, nn));
+
+        sparse_matvec_acks2(&H, &X, g, y);
+        pack_flag = 3;
+        comm->reverse_comm(this); //Dist_vector(y);
+        more_reverse_comm(y);
+        // printf("CG ||y||: %f\n", parallel_norm(y, nn));
+
+        gy = parallel_dot(g, y, nn);
+        // printf("CG gy: %f\n", gy);
+        alpha = rho / gy;
+        // printf("alpha: %f\n", alpha);
+
+        vector_add(x, alpha, g, nn);
+        // printf("CG ||x||: %f\n", parallel_norm(x, nn));
+
+        vector_add(r_hat, -alpha, y, nn);
+        // printf("CG ||r_hat||: %f\n", parallel_norm(r_hat, nn));
+
+        rnorm = parallel_norm(r_hat, nn);
+
+        rho_old = rho;
+
+        if (rnorm / bnorm < tolerance) break;
+    }
+
+    printf("CG rnorm / bnorm: %f\n", rnorm / bnorm);
+    return i;
 }
 
 /* ---------------------------------------------------------------------- */
