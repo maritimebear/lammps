@@ -589,8 +589,8 @@ int FixACKS2ReaxFF::BiCGStab(double *b, double *x)
   bnorm = parallel_norm(b, nn); // double parallel_norm(double *v, int n)
   rnorm = parallel_norm(r, nn);
 
-  // if (bnorm == 0.0) bnorm = 1.0;
-  if (fabs(bnorm) < zero_threshold) bnorm = 1.0;
+  if (bnorm == 0.0) bnorm = 1.0;
+  // if (fabs(bnorm) < zero_threshold) bnorm = 1.0;
   vector_copy(r_hat, r, nn); // void vector_copy(double* dest, double* v, int k); dest <- v
   omega = 1.0;
   rho = 1.0;
