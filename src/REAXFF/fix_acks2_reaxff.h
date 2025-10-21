@@ -25,6 +25,7 @@ FixStyle(acks2/reaxff,FixACKS2ReaxFF);
 
 #include <sstream>
 #include <vector>
+#include <random>
 
 namespace LAMMPS_NS {
 
@@ -64,6 +65,10 @@ class FixACKS2ReaxFF : public FixQEqReaxFF {
   std::vector<double> vec_X_diag;
   std::vector<double> vec_Xdia_inv;
 
+  int random_seed;
+  std::mt19937 random_gen;
+  std::uniform_real_distribution<double> uniform_rand_dist;
+
   void pertype_parameters(char *) override;
   void init_bondcut();
   void allocate_storage() override;
@@ -92,6 +97,8 @@ class FixACKS2ReaxFF : public FixQEqReaxFF {
 
   bool array_vec_equal(double*, const std::vector<double>&);
   bool diag_vec_equal(double*, const std::vector<double>&);
+
+  void fill_random(double*, int);
 
   int pack_forward_comm(int, int *, double *, int, int *) override;
   void unpack_forward_comm(int, int, double *) override;

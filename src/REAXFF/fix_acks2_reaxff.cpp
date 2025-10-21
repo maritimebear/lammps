@@ -95,6 +95,11 @@ FixACKS2ReaxFF::FixACKS2ReaxFF(LAMMPS *lmp, int narg, char **arg) :
   vec_X_diag = {};
   vec_Xdia_inv = {};
 
+  // random_gen = std::mt19937(random_device());
+  random_seed = 0;
+  random_gen = std::mt19937(random_seed);
+  uniform_rand_dist = std::uniform_real_distribution<double>(0.0, 1.0);
+
 }
 
 /* ---------------------------------------------------------------------- */
@@ -591,7 +596,8 @@ int FixACKS2ReaxFF::BiCGStab(double *b, double *x)
 
   // if (bnorm == 0.0) bnorm = 1.0;
   if (fabs(bnorm) < zero_threshold) bnorm = 1.0;
-  vector_copy(r_hat, r, nn); // void vector_copy(double* dest, double* v, int k); dest <- v
+  // vector_copy(r_hat, r, nn); // void vector_copy(double* dest, double* v, int k); dest <- v
+  fill_random(r_hat, nn); // Assign random values from uniform random distribution (0, 1) to array
   omega = 1.0;
   rho = 1.0;
 
@@ -1369,3 +1375,25 @@ void FixACKS2ReaxFF::vector_copy(double* dest, double* v, int k)
   }
 }
 
+void FixACKS2ReaxFF::fill_random(double* array, int k) {
+    // Assign random values from uniform random distribution (0, 1) to array
+    // Intended to initialise shadow residual:
+    // Schoutrop et al. 2022, "Reliability Investigation of BiCGStab and IDR Solvers for the Advection-Diffusion-Reaction Equation"
+
+    // Based on FixACKS2ReaxFF::vector_copy()
+    int kk;
+
+    for (--k; k>=0; --k) {
+        kk = ilist[k];
+        if (atom->mask[kk] & groupbit) {
+            array[kk] = this->uniform_rand_dist(this->random_gen);
+            array[NN + kk] = this->uniform_rand_dist(this->random_gen);
+        }
+    }
+
+    // last two rows
+    if (last_rows_flag) {
+        array[2*NN] = this->uniform_rand_dist(this->random_gen);
+        array[2*NN + 1] = this->uniform_rand_dist(this->random_gen);
+    }
+}
