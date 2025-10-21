@@ -386,7 +386,7 @@ void FixACKS2ReaxFF::pre_force(int /*vflag*/)
   }
 
   // matvecs = BiCGStab(b_s, s); // BiCGStab on s - parallel
-  matvecs = RestartedBiCGStab(b_s, s, 1e-32, 500);
+  matvecs = RestartedBiCGStab(b_s, s, 1e-16, 1000);
 
   // printf("CG iterations: %d\n", matvecs);
 
@@ -759,7 +759,8 @@ int FixACKS2ReaxFF::ACKS2BiCGStab(double* b, double* x, double rhotol, int maxit
     for (i = 1; i < maxiters; ++i) {
         rho = parallel_dot(r_hat, r, nn);
         if (fabs(rho) < rhotol) {
-            error->all(FLERR, Error::NOLASTLINE, "BiCGStab(): |rho| = {:.2} < rhotol = {:.2}", fabs(rho), rhotol);
+            error->warning(FLERR, "BiCGStab(): |rho| = {:.2} < rhotol = {:.2}", fabs(rho), rhotol);
+            break;
         }
 
         if (i == 1) {
@@ -794,7 +795,8 @@ int FixACKS2ReaxFF::ACKS2BiCGStab(double* b, double* x, double rhotol, int maxit
 
         double rhat_z = parallel_dot(r_hat, z, nn);
         if (fabs(rhat_z) < rhotol) {
-            error->all(FLERR, Error::NOLASTLINE, "BiCGStab(): <r_hat, z> = {:.2} < rhotol = {:.2}", rhat_z, rhotol);
+            error->warning(FLERR, "BiCGStab(): <r_hat, z> = {:.2} < rhotol = {:.2}", rhat_z, rhotol);
+            break;
         }
 
         alpha = rho / rhat_z;
@@ -833,7 +835,8 @@ int FixACKS2ReaxFF::ACKS2BiCGStab(double* b, double* x, double rhotol, int maxit
         double y_y = parallel_dot(y, y, nn);
         omega = y_q / y_y;
         if (fabs(omega) < rhotol) {
-            error->all(FLERR, Error::NOLASTLINE, "BiCGStab(): |omega| = {:.2} < rhotol = {:.2}", fabs(omega), rhotol);
+            error->warning(FLERR, "BiCGStab(): |omega| = {:.2} < rhotol = {:.2}", fabs(omega), rhotol);
+            break;
         }
 
         vector_add(x, alpha, d, nn);
