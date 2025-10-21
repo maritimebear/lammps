@@ -634,7 +634,7 @@ int FixACKS2ReaxFF::BiCGStab(double *b, double *x)
     if (fabs(tmp) < 1e-16) {
         error->warning(FLERR,"BiCGStab step {}: <r_hat, z> = {:.8}, ||r_hat|| = {:.8}, ||z|| = {:.8}",
                       i, tmp, parallel_norm(r_hat, nn), parallel_norm(z, nn));
-        break;
+        // break;
     }
     alpha = rho / tmp;
 
