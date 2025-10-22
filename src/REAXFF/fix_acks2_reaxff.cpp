@@ -756,6 +756,11 @@ int FixACKS2ReaxFF::ACKS2BiCGStab(double* b, double* x, double rhotol, int maxit
 
     vector_sum(r, 1.0, b, -1.0, d, nn);
 
+    double rnorm = parallel_norm(r, nn);
+    if (rnorm < bnorm * tolerance) {
+        return 0;
+    }
+
     vector_copy(r_hat, r, nn); // Shadow residual
 
     for (i = 1; i < maxiters; ++i) {
@@ -846,8 +851,8 @@ int FixACKS2ReaxFF::ACKS2BiCGStab(double* b, double* x, double rhotol, int maxit
 
         vector_sum(r, 1.0, q, -omega, y, nn);
 
-        double rnorm = parallel_norm(r, nn);
-        if (rnorm < tolerance) {
+        rnorm = parallel_norm(r, nn);
+        if (rnorm < bnorm * tolerance) {
             return i;
         }
 
