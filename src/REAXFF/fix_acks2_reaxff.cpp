@@ -386,9 +386,11 @@ void FixACKS2ReaxFF::pre_force(int /*vflag*/)
   }
 
   // matvecs = BiCGStab(b_s, s); // BiCGStab on s - parallel
-  matvecs = RestartedBiCGStab(b_s, s, 1e-16, 1000);
-
+  // matvecs = ACKS2CG(b_s, s);
   // printf("CG iterations: %d\n", matvecs);
+
+  matvecs = RestartedBiCGStab(b_s, s, 1e-15, 1000);
+
 
   if (print_system) {
       print_array(s, nn, append_timestep("solution_post."));
@@ -860,92 +862,79 @@ int FixACKS2ReaxFF::ACKS2BiCGStab(double* b, double* x, double rhotol, int maxit
 
 int FixACKS2ReaxFF::ACKS2CG(double* b, double* x) {
     
-    /* z = Ax
-     * r_hat = r
-     * q_hat = z
-     * g = p
-     * y = q
-    */ 
-
     int i = 0;
-    int j, jj;
-
+    double rnorm = 0.0;
+    double bnorm = 0.0;
     double rho = 0.0;
     double beta = 0.0;
     double rho_old = 0.0;
-    double gy = 0.0;
     double alpha = 0.0;
-    double rnorm = 0.0;
-    double bnorm = parallel_norm(b, nn);
 
-    // printf("CG bnorm: %f\n", bnorm);
-
+    // z = Ax
     sparse_matvec_acks2(&H, &X, x, z);
-    pack_flag = 1;
-    comm->reverse_comm(this); //Coll_Vector(d);
+    pack_flag = 2;
+    comm->reverse_comm(this);
     more_reverse_comm(z);
 
-    vector_sum(r_hat , 1.,  b, -1., z, nn);
-    // printf("\nCG initial ||r_hat||: %f\n\n", parallel_norm(r_hat, nn));
+    // r_hat = residual = b - z
+    this->vector_sum(r_hat, 1.0, b, -1.0, z, nn);
+
+    rnorm = this->parallel_norm(r_hat, nn);
+    bnorm = this->parallel_norm(b, nn);
+
+    if (rnorm < bnorm * tolerance) {
+        return 0;
+    }
 
     for (i = 1; i < imax; ++i) {
 
         // pre-conditioning
-        for (jj = 0; jj < nn; ++jj) {
-          j = ilist[jj];
-          if (atom->mask[j] & groupbit) {
-            q_hat[j] = r_hat[j] * Hdia_inv[j];
-            q_hat[NN+j] = r_hat[NN+j] * Xdia_inv[j];
-          }
+        // q_hat = M^-1 * r_hat
+        for (int jj = 0; jj < nn; ++jj) {
+            int j = ilist[jj];
+            if (atom->mask[j] & groupbit) {
+                q_hat[j] = Hdia_inv[j] * r_hat[j];
+                q_hat[NN + j] = Xdia_inv[j] * r_hat[NN + j];
+            }
         }
         // last two rows
         if (last_rows_flag) {
-          q_hat[2*NN] = r_hat[2*NN];
-          q_hat[2*NN + 1] = r_hat[2*NN + 1];
+            q_hat[2*NN] = r_hat[2*NN];
+            q_hat[2*NN + 1] = r_hat[2*NN + 1];
         }
         pack_flag = 3;
-        comm->forward_comm(this); //Dist_vector(q_hat);
+        comm->forward_comm(this);
         more_forward_comm(q_hat);
-        // printf("CG ||q_hat||: %f\n", parallel_norm(q_hat, nn));
 
-        rho = parallel_dot(r_hat, q_hat, nn);
-        // printf("rho: %f\n", rho);
+        rho = this->parallel_dot(r_hat, q_hat, nn);
 
         if (i == 1) {
-            vector_copy(g, q_hat, nn);
+            this->vector_copy(g, q_hat, nn); // g = q_hat
         } else {
             beta = rho / rho_old;
-            // printf("beta: %f\n", beta);
-            vector_sum(g, 1.0, q_hat, beta, g, nn);
+            this->vector_sum(g, 1.0, q_hat, beta, g, nn); // g = q_hat + beta * g
         }
-        // printf("CG ||g||: %f\n", parallel_norm(g, nn));
 
+        // y = Ag
         sparse_matvec_acks2(&H, &X, g, y);
         pack_flag = 3;
-        comm->reverse_comm(this); //Dist_vector(y);
+        comm->reverse_comm(this);
         more_reverse_comm(y);
-        // printf("CG ||y||: %f\n", parallel_norm(y, nn));
 
-        gy = parallel_dot(g, y, nn);
-        // printf("CG gy: %f\n", gy);
+        double gy = this->parallel_dot(g, y, nn);
         alpha = rho / gy;
-        // printf("alpha: %f\n", alpha);
 
-        vector_add(x, alpha, g, nn);
-        // printf("CG ||x||: %f\n", parallel_norm(x, nn));
-
-        vector_add(r_hat, -alpha, y, nn);
-        // printf("CG ||r_hat||: %f\n", parallel_norm(r_hat, nn));
-
-        rnorm = parallel_norm(r_hat, nn);
+        this->vector_add(x, alpha, g, nn); // x = x + alpha * g
+        this->vector_add(r_hat, -alpha, y, nn); // r_hat = rhat - alpha * y
 
         rho_old = rho;
 
-        if (rnorm / bnorm < tolerance) break;
+        if (rnorm < bnorm * tolerance) {
+            return i;
+        }
     }
 
-    printf("CG rnorm / bnorm: %f\n", rnorm / bnorm);
-    return i;
+    return -1;
 }
 
 /* ---------------------------------------------------------------------- */
