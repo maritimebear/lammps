@@ -35,6 +35,9 @@
 #include <cstring>
 #include <exception>
 
+#include <sstream>
+#include <vector>
+
 using namespace LAMMPS_NS;
 using namespace FixConst;
 

@@ -23,9 +23,6 @@ FixStyle(acks2/reaxff,FixACKS2ReaxFF);
 
 #include "fix_qeq_reaxff.h"
 
-#include <sstream>
-#include <vector>
-
 namespace LAMMPS_NS {
 
 class FixACKS2ReaxFF : public FixQEqReaxFF {
