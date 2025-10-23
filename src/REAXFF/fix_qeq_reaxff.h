@@ -87,6 +87,7 @@ class FixQEqReaxFF : public Fix {
     int *numnbrs;
     int *jlist;
     double *val;
+    int *ilist; // TODO Cleanup
   } sparse_matrix;
 
   sparse_matrix H;

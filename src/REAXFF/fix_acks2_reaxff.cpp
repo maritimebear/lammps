@@ -75,6 +75,7 @@ FixACKS2ReaxFF::FixACKS2ReaxFF(LAMMPS *lmp, int narg, char **arg) :
   X.numnbrs = nullptr;
   X.jlist = nullptr;
   X.val = nullptr;
+  X.ilist = nullptr; // TODO Cleanup
 
   // Update comm sizes for this fix
   comm_forward = comm_reverse = 2;
@@ -285,6 +286,7 @@ void FixACKS2ReaxFF::allocate_matrix()
   memory->create(X.numnbrs,n_cap,"acks2:X.numnbrs");
   memory->create(X.jlist,m_cap,"acks2:X.jlist");
   memory->create(X.val,m_cap,"acks2:X.val");
+  memory->create(X.ilist,m_cap,"acks2:X.ilist"); // TODO Cleanup
 }
 
 /* ---------------------------------------------------------------------- */
@@ -297,6 +299,7 @@ void FixACKS2ReaxFF::deallocate_matrix()
   memory->destroy(X.numnbrs);
   memory->destroy(X.jlist);
   memory->destroy(X.val);
+  memory->destroy(X.ilist); // TODO Cleanup
 }
 
 /* ---------------------------------------------------------------------- */
@@ -546,6 +549,7 @@ void FixACKS2ReaxFF::compute_X()
           double bcutoff2 = bcutoff*bcutoff;
           if (r_sqr <= bcutoff2) {
             X.jlist[m_fill] = j;
+            X.ilist[m_fill] = i; // TODO Cleanup
             double X_val = calculate_X(sqrt(r_sqr), bcutoff);
             X.val[m_fill] = X_val;
             X_diag[i] -= X_val;
@@ -952,7 +956,8 @@ void FixACKS2ReaxFF::sparse_matvec_acks2(sparse_matrix *H, sparse_matrix *X, dou
   int i, j, itr_j;
   int ii;
 
-  for (ii = 0; ii < nn; ++ii) {
+  // Multiply with matrix diagonals
+  for (ii = 0; ii < nn; ++ii) { // owned atom entries
     i = ilist[ii];
     if (atom->mask[i] & groupbit) {
       b[i] = eta[atom->type[i]] * x[i];
@@ -960,7 +965,7 @@ void FixACKS2ReaxFF::sparse_matvec_acks2(sparse_matrix *H, sparse_matrix *X, dou
     }
   }
 
-  for (i = atom->nlocal; i < NN; ++i) {
+  for (i = atom->nlocal; i < NN; ++i) { // ghost atom entries
     if (atom->mask[i] & groupbit) {
       b[i] = 0;
       b[NN + i] = 0;

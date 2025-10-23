@@ -131,6 +131,7 @@ FixQEqReaxFF::FixQEqReaxFF(LAMMPS *lmp, int narg, char **arg) :
   H.numnbrs = nullptr;
   H.jlist = nullptr;
   H.val = nullptr;
+  H.ilist = nullptr; // TODO cleanup
 
   // dual CG support
   // Update comm sizes for this fix
@@ -372,6 +373,7 @@ void FixQEqReaxFF::allocate_matrix()
   memory->create(H.numnbrs,n_cap,"qeq:H.numnbrs");
   memory->create(H.jlist,m_cap,"qeq:H.jlist");
   memory->create(H.val,m_cap,"qeq:H.val");
+  memory->create(H.ilist,m_cap,"qeq:H.ilist"); // TODO Cleanup
 }
 
 /* ---------------------------------------------------------------------- */
@@ -382,6 +384,7 @@ void FixQEqReaxFF::deallocate_matrix()
   memory->destroy(H.numnbrs);
   memory->destroy(H.jlist);
   memory->destroy(H.val);
+  memory->destroy(H.ilist); // TODO Cleanup
 }
 
 /* ---------------------------------------------------------------------- */
@@ -710,7 +713,8 @@ void FixQEqReaxFF::compute_H()
         }
 
         if (flag) {
-          H.jlist[m_fill] = j; // index of last flagged neighbour atom?
+          H.jlist[m_fill] = j; // local index of last flagged neighbour atom
+          H.ilist[m_fill] = i; // local index of current owned atom
           H.val[m_fill] = calculate_H(sqrt(r_sqr), shld[type[i]][type[j]]);
           m_fill++;
         }
