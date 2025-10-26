@@ -58,6 +58,17 @@ static const char cite_fix_acks2_reax[] =
 FixACKS2ReaxFF::FixACKS2ReaxFF(LAMMPS *lmp, int narg, char **arg) :
   FixQEqReaxFF(lmp, narg, arg)
 {
+
+  // TODO Cleanup
+  // Restrict ACKS2 to serial execution to test BICGStab
+  int _rank = 0;
+  int  _size = 0;
+  MPI_Comm_rank(MPI_COMM_WORLD, &_rank);
+  MPI_Comm_size(MPI_COMM_WORLD, &_size);
+  if (_size != 1 || _rank != 0) {
+    error->all(FLERR, Error::NOLASTLINE, "ACKS2 restricted to serial execution on this branch");
+  }
+
   bcut = nullptr;
 
   X_diag = nullptr;
