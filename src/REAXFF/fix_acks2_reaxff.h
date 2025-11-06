@@ -83,7 +83,7 @@ class FixACKS2ReaxFF : public FixQEqReaxFF {
   void print_sparse_matrix(sparse_matrix&, const std::string&); // TODO: Remove after debugging ACKS2?
   void print_matrix_diagonals();
   void print_array(double*, int, const std::string&);
-  int copy_array_to_vector(double* , std::vector<double>&);
+  // int copy_array_to_vector(double* , std::vector<double>&);
   void copy_X_diag(std::vector<double>&);
   void copy_Xdia_inv(std::vector<double>&);
   int copy_H_diag(std::vector<double>&);
@@ -92,6 +92,8 @@ class FixACKS2ReaxFF : public FixQEqReaxFF {
   int ACKS2CG(double*, double*);
   int ACKS2BiCGStab(double*, double*, double, int);
   int RestartedBiCGStab(double*, double*, double, int);
+  void copy_array_to_vector(double*, std::vector<double>&) const;
+  void compare_vectors(std::vector<double>&, std::vector<double>&) const;
   std::unordered_map<int, int> construct_tag_map() const;
 
 

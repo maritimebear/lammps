@@ -793,6 +793,51 @@ int FixACKS2ReaxFF::RestartedBiCGStab(double* b, double* x, double rhotol, int r
 
 /* ---------------------------------------------------------------------- */
 
+void FixACKS2ReaxFF::copy_array_to_vector(double* array, std::vector<double>& vector) const {
+//     // Copy from ACKS2 arrays to std::vectors
+
+//     // Update owned atoms before copying into data structures
+//     vector_copy(d, array, nn); // Copy owned atoms from array to d
+//     pack_flag = 1; // Use existing reverse comm to avoid unintentional errors
+//     comm->reverse_comm(this);
+//     more_reverse_comm(d);
+
+//     // Copy from d to std::vector
+//     for (int _ii = 0; _ii < atom->nlocal; ++_ii) {
+//         int _i = ilist[_ii];
+//         if (atom->mask[_i] & groupbit) {
+//             int atom_ID = atom->tag[_i] - 1; // tag is 1-indexed
+//             vector.at(atom_ID) = d[_i];
+//         }
+//     }
+
+    for (int _ii = 0; _ii < atom->nlocal; ++_ii) {
+        int _i = ilist[_ii];
+        if (atom->mask[_i] & groupbit) {
+            int atom_ID = atom->tag[_i] - 1;
+            vector.at(atom_ID) = array[_i];
+        }
+    }
+
+}
+
+/* ---------------------------------------------------------------------- */
+
+void FixACKS2ReaxFF::compare_vectors(std::vector<double>& v1, std::vector<double>& v2) const {
+    // Print vector elements that differ
+    if ((v1.size() != atom->natoms) || (v2.size() != atom->natoms)) {
+        error->all(FLERR, Error::NOLASTLINE, "v1.size: {}, v2.size: {}, atom->natoms: {}", v1.size(), v2.size(), atom->natoms);
+    }
+
+    for (int i = 0; i < atom->natoms; ++i) {
+        if (v1[i] != v2[i]) {
+            printf("%d \t v1[%d]: %f \t v2[%d]: %f, delta: %f\n", i, i, v1[i], i, v2[i], (v1[i] - v2[i]));
+        }
+    }
+}
+
+/* ---------------------------------------------------------------------- */
+
 std::unordered_map<int, int> FixACKS2ReaxFF::construct_tag_map() const {
     // Return map of owned atom tag (1-indexed) : ilist index
 
@@ -1194,27 +1239,27 @@ void FixACKS2ReaxFF::print_array(double* array, int idx_top, const std::string& 
 
 /* ---------------------------------------------------------------------- */
 
-int FixACKS2ReaxFF::copy_array_to_vector(double* array, std::vector<double>& vec) {
-    // Copy b_s and s into vec_b_s and vec_s
-    // Returns number of values copied, for testing/understanding LAMMPS data structures
-    // uses std::vector::at(), i.e. performs bounds checking
-    int count = 0;
-    for (int ii = 0; ii < NN; ii++) {
-        int i = ilist[ii];
-        if (atom->mask[i] & groupbit) {
-            vec.at(i) = array[i];
-            ++count;
-            vec.at(NN + i) = array[NN + i];
-            ++count;
-        }
-    }
-    // Last two rows
-    for (int i = 0; i < 2; ++i) {
-        vec.at(2*NN + i) = array[2*NN + i];
-        ++count;
-    }
-    return count;
-}
+// int FixACKS2ReaxFF::copy_array_to_vector(double* array, std::vector<double>& vec) {
+//     // Copy b_s and s into vec_b_s and vec_s
+//     // Returns number of values copied, for testing/understanding LAMMPS data structures
+//     // uses std::vector::at(), i.e. performs bounds checking
+//     int count = 0;
+//     for (int ii = 0; ii < NN; ii++) {
+//         int i = ilist[ii];
+//         if (atom->mask[i] & groupbit) {
+//             vec.at(i) = array[i];
+//             ++count;
+//             vec.at(NN + i) = array[NN + i];
+//             ++count;
+//         }
+//     }
+//     // Last two rows
+//     for (int i = 0; i < 2; ++i) {
+//         vec.at(2*NN + i) = array[2*NN + i];
+//         ++count;
+//     }
+//     return count;
+// }
 
 /* ---------------------------------------------------------------------- */
 
