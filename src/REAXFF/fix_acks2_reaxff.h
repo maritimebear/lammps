@@ -91,6 +91,7 @@ class FixACKS2ReaxFF : public FixQEqReaxFF {
 
   int ACKS2CG(double*, double*);
   int ACKS2BiCGStab(double*, double*, double, int);
+  int BiCGStab_NoComm(double*, double*, double, int);
   int _ACKS2BiCGStab(double*, double*, double, int);
   int RestartedBiCGStab(double*, double*, double, int);
   void copy_array_to_vector(double*, std::vector<double>&) const;
