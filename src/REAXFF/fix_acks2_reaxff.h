@@ -22,6 +22,7 @@ FixStyle(acks2/reaxff,FixACKS2ReaxFF);
 #define LMP_FIX_ACKS2_REAXFF_H
 
 #include "fix_qeq_reaxff.h"
+#include <unordered_map>
 
 namespace LAMMPS_NS {
 
@@ -91,6 +92,8 @@ class FixACKS2ReaxFF : public FixQEqReaxFF {
   int ACKS2CG(double*, double*);
   int ACKS2BiCGStab(double*, double*, double, int);
   int RestartedBiCGStab(double*, double*, double, int);
+  std::unordered_map<int, int> construct_tag_map() const;
+
 
   bool array_vec_equal(double*, const std::vector<double>&);
   bool diag_vec_equal(double*, const std::vector<double>&);

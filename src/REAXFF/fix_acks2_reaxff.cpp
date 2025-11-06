@@ -37,6 +37,7 @@
 
 #include <sstream>
 #include <vector>
+#include <unordered_map>
 
 using namespace LAMMPS_NS;
 using namespace FixConst;
@@ -788,6 +789,27 @@ int FixACKS2ReaxFF::RestartedBiCGStab(double* b, double* x, double rhotol, int r
 
     error->warning(FLERR,"Restarted BiCGStab failed to converge after {} x {} iterations, timestep {}", n_restarts, restart_interval, update->ntimestep);
     return -1;
+}
+
+/* ---------------------------------------------------------------------- */
+
+std::unordered_map<int, int> FixACKS2ReaxFF::construct_tag_map() const {
+    // Return map of owned atom tag (1-indexed) : ilist index
+
+    std::unordered_map<int, int> tag_map;
+
+    for (int ii = 0; ii < atom->nlocal; ++ii) {
+        int i = ilist[ii];
+        if (atom->mask[i] & groupbit) {
+            tag_map[atom->tag[i]] = i;
+        }
+    }
+
+    if (tag_map.size() != atom->nlocal) { // Sanity check
+        error->all(FLERR, Error::NOLASTLINE, "tag_map.size(): {}, atom->nlocal: {}", tag_map.size(), atom->nlocal);
+    }
+
+    return tag_map;
 }
 
 /* ---------------------------------------------------------------------- */
