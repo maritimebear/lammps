@@ -70,6 +70,7 @@ class FixACKS2ReaxFF : public FixQEqReaxFF {
 
   void init_matvec() override;
   void compute_X();
+  bool Xflag(int, int); // TODO Cleanup
   double calculate_X(double, double);
   void calculate_Q() override;
 

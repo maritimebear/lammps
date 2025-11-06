@@ -536,26 +536,36 @@ void FixACKS2ReaxFF::compute_X()
         j = jlist[jj];
         j &= NEIGHMASK;
 
-        dx = x[j][0] - x[i][0];
-        dy = x[j][1] - x[i][1];
-        dz = x[j][2] - x[i][2];
-        r_sqr = SQR(dx) + SQR(dy) + SQR(dz);
+        // TODO Cleanup
+        // dx = x[j][0] - x[i][0];
+        // dy = x[j][1] - x[i][1];
+        // dz = x[j][2] - x[i][2];
+        // r_sqr = SQR(dx) + SQR(dy) + SQR(dz);
 
-        flag = 0;
-        if (r_sqr <= SQR(swb)) {
-          if (j < atom->nlocal) flag = 1;
-          else if (tag[i] < tag[j]) flag = 1;
-          else if (tag[i] == tag[j]) {
-            if (dz > SMALL) flag = 1;
-            else if (fabs(dz) < SMALL) {
-              if (dy > SMALL) flag = 1;
-              else if (fabs(dy) < SMALL && dx > SMALL)
-                flag = 1;
-            }
-          }
-        }
+        // flag = 0;
+        // if (r_sqr <= SQR(swb)) {
+        //   if (j < atom->nlocal) flag = 1;
+        //   else if (tag[i] < tag[j]) flag = 1;
+        //   else if (tag[i] == tag[j]) {
+        //     if (dz > SMALL) flag = 1;
+        //     else if (fabs(dz) < SMALL) {
+        //       if (dy > SMALL) flag = 1;
+        //       else if (fabs(dy) < SMALL && dx > SMALL)
+        //         flag = 1;
+        //     }
+        //   }
+        // }
+
+        flag = Xflag(i, j); // TODO Cleanup
 
         if (flag) {
+
+          // TODO Cleanup dx, dy, dz, r_sqr
+          dx = x[j][0] - x[i][0];
+          dy = x[j][1] - x[i][1];
+          dz = x[j][2] - x[i][2];
+          r_sqr = SQR(dx) + SQR(dy) + SQR(dz);
+
           double bcutoff = bcut[type[i]][type[j]]; // sigma_{ij} in Koski paper
           double bcutoff2 = bcutoff*bcutoff;
           if (r_sqr <= bcutoff2) {
@@ -576,6 +586,37 @@ void FixACKS2ReaxFF::compute_X()
 
   if (m_fill >= X.m)
     error->all(FLERR,"Fix acks2/reaxff has insufficient ACKS2 X matrix size: m_fill={} X.m={}\n",m_fill,X.m);
+}
+
+/* ---------------------------------------------------------------------- */
+
+// TODO Cleanup
+bool FixACKS2ReaxFF::Xflag(int i, int j) {
+
+    double **x = atom->x;
+    tagint *tag = atom->tag;
+    const double SMALL = 0.0001;
+
+    double dx = x[j][0] - x[i][0];
+    double dy = x[j][1] - x[i][1];
+    double dz = x[j][2] - x[i][2];
+    double r_sqr = SQR(dx) + SQR(dy) + SQR(dz);
+
+    bool flag = 0;
+    if (r_sqr <= SQR(swb)) {
+      if (j < atom->nlocal) flag = 1;
+      else if (tag[i] < tag[j]) flag = 1;
+      else if (tag[i] == tag[j]) {
+        if (dz > SMALL) flag = 1;
+        else if (fabs(dz) < SMALL) {
+          if (dy > SMALL) flag = 1;
+          else if (fabs(dy) < SMALL && dx > SMALL)
+            flag = 1;
+        }
+      }
+    }
+
+    return flag;
 }
 
 /* ---------------------------------------------------------------------- */
