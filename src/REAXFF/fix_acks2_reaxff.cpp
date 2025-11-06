@@ -474,36 +474,36 @@ void FixACKS2ReaxFF::init_matvec() // Calculates pre-conditioner entries, pre-co
 
   // TODO cleanup
   // Copy arrays into vectors
-  int n_values_b_s = copy_array_to_vector(b_s, vec_b_s);
-  int n_values_s = copy_array_to_vector(s, vec_s);
+  // int n_values_b_s = copy_array_to_vector(b_s, vec_b_s);
+  // int n_values_s = copy_array_to_vector(s, vec_s);
 
-  // printf("\nn_values_s: %d, nmax*2+2: %d, s.size: %ld\n", n_values_s, (atom->nmax*2 + 2), vec_s.size());
+  // // printf("\nn_values_s: %d, nmax*2+2: %d, s.size: %ld\n", n_values_s, (atom->nmax*2 + 2), vec_s.size());
 
-  // Check if arrays and vectors are EQUAL
-  if (!array_vec_equal(b_s, vec_b_s)) {
-      error->all(FLERR, Error::NOLASTLINE, "b_s != vec_b_s");
-  }
-  if (!array_vec_equal(s, vec_s)) {
-      error->all(FLERR, Error::NOLASTLINE, "s != vec_s");
-  }
+  // // Check if arrays and vectors are EQUAL
+  // if (!array_vec_equal(b_s, vec_b_s)) {
+  //     error->all(FLERR, Error::NOLASTLINE, "b_s != vec_b_s");
+  // }
+  // if (!array_vec_equal(s, vec_s)) {
+  //     error->all(FLERR, Error::NOLASTLINE, "s != vec_s");
+  // }
 
-  // Copy diagonals into vectors
-  int n_values_H_diag = copy_H_diag(vec_H_diag);
-  int n_values_Hdia_inv = copy_Hdia_inv(vec_Hdia_inv);
-  copy_X_diag(vec_X_diag);
-  copy_Xdia_inv(vec_Xdia_inv);
+  // // Copy diagonals into vectors
+  // int n_values_H_diag = copy_H_diag(vec_H_diag);
+  // int n_values_Hdia_inv = copy_Hdia_inv(vec_Hdia_inv);
+  // copy_X_diag(vec_X_diag);
+  // copy_Xdia_inv(vec_Xdia_inv);
 
-  // Check diagonals copied
-  // Cannot directly check vec_H_diag: no H_diag array, values accessed by eta[atom->type[i]] instead of H_diag[i]
-  if (!diag_vec_equal(Hdia_inv, vec_Hdia_inv)) {
-      error->all(FLERR, Error::NOLASTLINE, "Hdia_inv != vec_Hdia_inv");
-  }
-  if (!diag_vec_equal(X_diag, vec_X_diag)) {
-      error->all(FLERR, Error::NOLASTLINE, "X_diag != vec_X_diag");
-  }
-  if (!diag_vec_equal(Xdia_inv, vec_Xdia_inv)) {
-      error->all(FLERR, Error::NOLASTLINE, "Xdia_inv != vec_Xdia_inv");
-  }
+  // // Check diagonals copied
+  // // Cannot directly check vec_H_diag: no H_diag array, values accessed by eta[atom->type[i]] instead of H_diag[i]
+  // if (!diag_vec_equal(Hdia_inv, vec_Hdia_inv)) {
+  //     error->all(FLERR, Error::NOLASTLINE, "Hdia_inv != vec_Hdia_inv");
+  // }
+  // if (!diag_vec_equal(X_diag, vec_X_diag)) {
+  //     error->all(FLERR, Error::NOLASTLINE, "X_diag != vec_X_diag");
+  // }
+  // if (!diag_vec_equal(Xdia_inv, vec_Xdia_inv)) {
+  //     error->all(FLERR, Error::NOLASTLINE, "Xdia_inv != vec_Xdia_inv");
+  // }
 
 }
 
@@ -775,7 +775,8 @@ int FixACKS2ReaxFF::RestartedBiCGStab(double* b, double* x, double rhotol, int r
 
     for (int n = 0; n < n_restarts; ++n) {
         // printf("n: %d\n", n);
-        int return_code = ACKS2BiCGStab(b, x, rhotol, restart_interval);
+        // int return_code = ACKS2BiCGStab(b, x, rhotol, restart_interval);
+        int return_code = _ACKS2BiCGStab(b, x, rhotol, restart_interval);
         double xnorm = parallel_norm(x, nn);
         printf("xnorm: %f\n", xnorm);
         if (return_code == -1) {
@@ -859,7 +860,64 @@ std::unordered_map<int, int> FixACKS2ReaxFF::construct_tag_map() const {
 
 /* ---------------------------------------------------------------------- */
 
-int FixACKS2ReaxFF::ACKS2BiCGStab(double* b, double* x, double rhotol, int maxiters) {
+int FixACKS2ReaxFF::_ACKS2BiCGStab(double* b, double* x, double rhotol, int maxiters) {
+
+    // Initialise data structures
+    std::vector<double> vx(atom->natoms, 0.0);
+    std::vector<double> vb(atom->natoms, 0.0);
+
+    // Map of atom tag (1-indexed) : ilist index
+    const std::unordered_map<int, int> tag_map = construct_tag_map();
+
+    // Copy into data structures
+    copy_array_to_vector(x, vx);
+    copy_array_to_vector(b, vb);
+
+    // Assemble matrix
+
+
+
+
+    // std::vector<double> vx(atom->natoms, 0.0);
+    // std::vector<double> vd(atom->natoms, 0.0);
+
+    // // TODO Remove
+    // // Update owned atoms before copying into data structures
+    // // vector_copy(d, x, nn); // Copy owned atoms from x to d
+
+    // // pack_flag = 1; // Use existing reverse comm to avoid unintentional errors; 
+    // // comm->reverse_comm(this);
+    // // more_reverse_comm(d);
+
+    // copy_array_to_vector(x, vx);
+    // copy_array_to_vector(d, vd);
+
+    // compare_vectors(vx, vd);
+
+    // error->all(FLERR, Error::NOLASTLINE, "Stop");
+
+    // Copy into data structure
+    // for (int _ii = 0; _ii < atom->nlocal; ++_ii) {
+    //     int _i = ilist[_ii];
+    //     if (atom->mask[_i] & groupbit) {
+    //         int atom_ID = atom->tag[_i] - 1; // tag is 1-indexed
+    //         solution.at(atom_ID) = d[_i];
+    //     }
+    // }
+
+    // copy_array_to_vector(x, solution); // TODO
+    // TODO Remove
+    // for (int _ii = 0; _ii < atom->nlocal; ++_ii) {
+    //     int _i = ilist[_ii];
+    //     if (atom->mask[_i] & groupbit) {
+    //         int atom_ID = atom->tag[_i] - 1; // tag is 1-indexed
+    //         // if (solution[atom_ID] != x[_i]) error->all(FLERR, Error::NOLASTLINE, "solution[{}] != x[{}]", atom_ID, _i);
+    //         // if (solution[atom_ID] != d[_i]) error->all(FLERR, Error::NOLASTLINE, "solution[{}] != d[{}]", atom_ID, _i);
+    //         if (vx[atom_ID] != d[_i]) error->all(FLERR, Error::NOLASTLINE, "vx[{}] != d[{}]", atom_ID, _i);
+    //     }
+    // }
+
+
 
     int i = 0;
 
@@ -875,10 +933,34 @@ int FixACKS2ReaxFF::ACKS2BiCGStab(double* b, double* x, double rhotol, int maxit
         return 0;
     }
 
-    sparse_matvec_acks2(&H, &X, x, d);
+    sparse_matvec_acks2(&H, &X, x, d); // TODO Uncomment
     pack_flag = 1;
     comm->reverse_comm(this);
     more_reverse_comm(d);
+
+    // { // TODO Remove after testing
+    //     // previous reverse comm has updated owned atoms at this point
+    //     std::vector<double> test_vec(atom->natoms, 0.0);
+    //     for (int _ii = 0; _ii < atom->nlocal; ++_ii) {
+    //         int _i = ilist[_ii];
+    //         if (atom->mask[_i] & groupbit) {
+    //             int atom_ID = atom->tag[_i] - 1; // tag is 1-indexed
+    //             test_vec.at(atom_ID) = d[_i];
+    //         }
+    //     }
+    //     sparse_matvec_acks2(&H, &X, x, d);
+    //     pack_flag = 1;
+    //     comm->reverse_comm(this);
+    //     more_reverse_comm(d);
+
+    //     for (int _ii = 0; _ii < atom->nlocal; ++_ii) {
+    //         int _i = ilist[_ii];
+    //         if (atom->mask[_i] & groupbit) {
+    //             int atom_ID = atom->tag[_i] - 1; // tag is 1-indexed
+    //             if (test_vec[atom_ID] != d[_i]) error->all(FLERR, Error::NOLASTLINE, "test_vec[{}] != d[{}]", atom_ID, _i);
+    //         }
+    //     }
+    // }
 
     vector_sum(r, 1.0, b, -1.0, d, nn);
 
@@ -917,9 +999,215 @@ int FixACKS2ReaxFF::ACKS2BiCGStab(double* b, double* x, double rhotol, int maxit
             d[2*NN] = p[2*NN];
             d[2*NN + 1] = p[2*NN + 1];
         }
-        pack_flag = 1;
+        pack_flag = 1; // TODO Uncomment
         comm->forward_comm(this);
         more_forward_comm(d);
+
+        // { // TODO: Remove after testing
+        //   // previous forward comm has updated ghost atoms at this point
+        //     std::vector<double> test_vec(atom->natoms, 0.0);
+        //     for (int _ii = 0; _ii < (atom->nlocal + atom->nghost); ++_ii) {
+        //         int _i = ilist[_ii];
+        //         if (atom->mask[_i] & groupbit) {
+        //             int atom_ID = atom->tag[_i] - 1; // tag is 1-indexed
+        //             // printf("atom_ID: %d\n", atom_ID);
+        //             test_vec.at(atom_ID) = d[_i];
+        //         }
+        //     }
+
+        //     pack_flag = 1;
+        //     comm->forward_comm(this);
+        //     more_forward_comm(d);
+
+        //     for (int _ii = 1500; _ii < (atom->nlocal + atom->nghost); ++_ii) {
+        //         int _i = ilist[_ii];
+        //         if (atom->mask[_i] & groupbit) {
+        //             int atom_ID = atom->tag[_i] - 1; // tag is 1-indexed
+        //             if (test_vec[atom_ID] != d[_i]) error->all(FLERR, Error::NOLASTLINE, "test_vec[{}] != d[{}]", atom_ID, _i);
+        //         }
+        //     }
+        // }
+
+        sparse_matvec_acks2(&H, &X, d, z);
+        pack_flag = 2;
+        comm->reverse_comm(this);
+        more_reverse_comm(z);
+
+        double rhat_z = parallel_dot(r_hat, z, nn);
+        if (fabs(rhat_z) < rhotol) {
+            error->warning(FLERR, "BiCGStab(): <r_hat, z> = {:.2} < rhotol = {:.2}", rhat_z, rhotol);
+            break;
+        }
+
+        alpha = rho / rhat_z;
+
+        vector_sum(q, 1.0, r, -alpha, z, nn);
+
+        double qnorm = parallel_norm(q, nn);
+        if (qnorm < tolerance) {
+            vector_add(x, alpha, d, nn);
+            return i;
+        }
+
+        // pre-conditioning
+        for(int jj = 0; jj < nn; ++jj) {
+            int j = ilist[jj];
+            if (atom->mask[j] & groupbit) {
+                q_hat[j] = q[j] * Hdia_inv[j];
+                q_hat[NN + j] = q[NN + j] * Xdia_inv[j];
+            }
+        }
+        // last two rows
+        if (last_rows_flag) {
+            q_hat[2*NN] = q[2*NN];
+            q_hat[2*NN + 1] = q[2*NN + 1];
+        }
+        pack_flag = 3;
+        comm->forward_comm(this);
+        more_forward_comm(q_hat);
+
+        sparse_matvec_acks2(&H, &X, q_hat, y);
+        pack_flag = 3;
+        comm->reverse_comm(this);
+        more_reverse_comm(y);
+
+        double y_q = parallel_dot(y, q, nn);
+        double y_y = parallel_dot(y, y, nn);
+        omega = y_q / y_y;
+        if (fabs(omega) < rhotol) {
+            error->warning(FLERR, "BiCGStab(): |omega| = {:.2} < rhotol = {:.2}", fabs(omega), rhotol);
+            break;
+        }
+
+        vector_add(x, alpha, d, nn);
+        vector_add(x, omega, q_hat, nn);
+
+        vector_sum(r, 1.0, q, -omega, y, nn);
+
+        rnorm = parallel_norm(r, nn);
+        if (rnorm < bnorm * tolerance) {
+            return i;
+        }
+
+        rho_old = rho;
+    }
+
+    // error->warning(FLERR, "BiCGStab() failed to converge in {} iterations, timestep: {}", i, update->ntimestep);
+    return -1;
+}
+
+/* ---------------------------------------------------------------------- */
+
+int FixACKS2ReaxFF::ACKS2BiCGStab(double* b, double* x, double rhotol, int maxiters) {
+
+    int i = 0;
+
+    double rho = 0.0;
+    double beta = 0.0;
+    double alpha = 0.0;
+    double omega = 0.0;
+    double rho_old = 0.0;
+
+    double bnorm = parallel_norm(b, nn);
+    if (bnorm == 0.0) {
+        error->warning(FLERR, "BiCGStab(): ||b|| == 0.0, b == zero vector?");
+        return 0;
+    }
+
+    sparse_matvec_acks2(&H, &X, x, d); // TODO Uncomment
+    pack_flag = 1;
+    comm->reverse_comm(this);
+    more_reverse_comm(d);
+
+    // { // TODO Remove after testing
+    //     // previous reverse comm has updated owned atoms at this point
+    //     std::vector<double> test_vec(atom->natoms, 0.0);
+    //     for (int _ii = 0; _ii < atom->nlocal; ++_ii) {
+    //         int _i = ilist[_ii];
+    //         if (atom->mask[_i] & groupbit) {
+    //             int atom_ID = atom->tag[_i] - 1; // tag is 1-indexed
+    //             test_vec.at(atom_ID) = d[_i];
+    //         }
+    //     }
+    //     sparse_matvec_acks2(&H, &X, x, d);
+    //     pack_flag = 1;
+    //     comm->reverse_comm(this);
+    //     more_reverse_comm(d);
+
+    //     for (int _ii = 0; _ii < atom->nlocal; ++_ii) {
+    //         int _i = ilist[_ii];
+    //         if (atom->mask[_i] & groupbit) {
+    //             int atom_ID = atom->tag[_i] - 1; // tag is 1-indexed
+    //             if (test_vec[atom_ID] != d[_i]) error->all(FLERR, Error::NOLASTLINE, "test_vec[{}] != d[{}]", atom_ID, _i);
+    //         }
+    //     }
+    // }
+
+    vector_sum(r, 1.0, b, -1.0, d, nn);
+
+    double rnorm = parallel_norm(r, nn);
+    if (rnorm < bnorm * tolerance) {
+        return 0;
+    }
+
+    vector_copy(r_hat, r, nn); // Shadow residual
+
+    for (i = 1; i < maxiters; ++i) {
+        rho = parallel_dot(r_hat, r, nn);
+        if (fabs(rho) < rhotol) {
+            error->warning(FLERR, "BiCGStab(): |rho| = {:.2} < rhotol = {:.2}", fabs(rho), rhotol);
+            break;
+        }
+
+        if (i == 1) {
+            vector_copy(p, r, nn);
+        } else {
+            beta = (rho / rho_old) * (alpha / omega);
+            vector_sum(g, 1.0, p, -omega, z, nn);
+            vector_sum(p, 1.0, r, beta, g, nn);
+        }
+
+        // pre-conditioning
+        for (int jj = 0; jj < nn; ++jj) {
+            int j = ilist[jj];
+            if (atom->mask[j] & groupbit) {
+                d[j] = p[j] * Hdia_inv[j];
+                d[NN + j] = p[NN + j] * Xdia_inv[j];
+            }
+        }
+        // last two rows
+        if (last_rows_flag) {
+            d[2*NN] = p[2*NN];
+            d[2*NN + 1] = p[2*NN + 1];
+        }
+        pack_flag = 1; // TODO Uncomment
+        comm->forward_comm(this);
+        more_forward_comm(d);
+
+        // { // TODO: Remove after testing
+        //   // previous forward comm has updated ghost atoms at this point
+        //     std::vector<double> test_vec(atom->natoms, 0.0);
+        //     for (int _ii = 0; _ii < (atom->nlocal + atom->nghost); ++_ii) {
+        //         int _i = ilist[_ii];
+        //         if (atom->mask[_i] & groupbit) {
+        //             int atom_ID = atom->tag[_i] - 1; // tag is 1-indexed
+        //             // printf("atom_ID: %d\n", atom_ID);
+        //             test_vec.at(atom_ID) = d[_i];
+        //         }
+        //     }
+
+        //     pack_flag = 1;
+        //     comm->forward_comm(this);
+        //     more_forward_comm(d);
+
+        //     for (int _ii = 1500; _ii < (atom->nlocal + atom->nghost); ++_ii) {
+        //         int _i = ilist[_ii];
+        //         if (atom->mask[_i] & groupbit) {
+        //             int atom_ID = atom->tag[_i] - 1; // tag is 1-indexed
+        //             if (test_vec[atom_ID] != d[_i]) error->all(FLERR, Error::NOLASTLINE, "test_vec[{}] != d[{}]", atom_ID, _i);
+        //         }
+        //     }
+        // }
 
         sparse_matvec_acks2(&H, &X, d, z);
         pack_flag = 2;
