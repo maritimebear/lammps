@@ -23,8 +23,16 @@ FixStyle(acks2/reaxff,FixACKS2ReaxFF);
 
 #include "fix_qeq_reaxff.h"
 #include <unordered_map>
+#include <algorithm>
+#include <numeric>
 
 namespace LAMMPS_NS {
+
+struct crs_matrix {
+    std::vector<double> val;
+    std::vector<size_t> col_ind;
+    std::vector<size_t> row_ptr;
+};
 
 class FixACKS2ReaxFF : public FixQEqReaxFF {
  public:
@@ -97,10 +105,23 @@ class FixACKS2ReaxFF : public FixQEqReaxFF {
   void copy_array_to_vector(double*, std::vector<double>&) const;
   void compare_vectors(std::vector<double>&, std::vector<double>&) const;
   std::unordered_map<int, int> construct_tag_map() const;
+  crs_matrix assemble_acks2_matrix(const std::unordered_map<int, int>&) const;
+
+  template <typename T>
+  std::vector<size_t> sort_permutation(const std::vector<T>& vec_to_sort) const {
+      // Returns indices that would yield the sorted vector
+      // https://stackoverflow.com/questions/17074324/how-can-i-sort-two-vectors-in-the-same-way-with-criteria-that-uses-only-one-of
+      std::vector<size_t> indices(vec_to_sort.size());
+      std::iota(indices.begin(), indices.end(), 0); // Initialise vector of indices
+      std::sort(indices.begin(), indices.end(), [&] (size_t i, size_t j) { return vec_to_sort[i] < vec_to_sort[j]; });
+      return indices;
+  }
+
 
 
   bool array_vec_equal(double*, const std::vector<double>&);
   bool diag_vec_equal(double*, const std::vector<double>&);
+
 
   int pack_forward_comm(int, int *, double *, int, int *) override;
   void unpack_forward_comm(int, int, double *) override;
