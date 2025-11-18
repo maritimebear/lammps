@@ -693,34 +693,34 @@ void FixQEqReaxFF::compute_H()
         j = jlist[jj]; // j: index of neighbour atom, contains additional information removed by NEIGHMASK -- https://docs.lammps.org/Developer_write_pair.html
         j &= NEIGHMASK;
 
-        // dx = x[j][0] - x[i][0];
-        // dy = x[j][1] - x[i][1];
-        // dz = x[j][2] - x[i][2];
-        // r_sqr = SQR(dx) + SQR(dy) + SQR(dz);
+        dx = x[j][0] - x[i][0];
+        dy = x[j][1] - x[i][1];
+        dz = x[j][2] - x[i][2];
+        r_sqr = SQR(dx) + SQR(dy) + SQR(dz);
 
-        // flag = 0;
-        // if (r_sqr <= SQR(swb)) {
-        //   if (j < atom->nlocal) flag = 1;
-        //   else if (tag[i] < tag[j]) flag = 1;
-        //   else if (tag[i] == tag[j]) {
-        //     if (dz > EPSILON) flag = 1;
-        //     else if (fabs(dz) < EPSILON) {
-        //       if (dy > EPSILON) flag = 1;
-        //       else if (fabs(dy) < EPSILON && dx > EPSILON)
-        //         flag = 1;
-        //     }
-        //   }
-        // }
+        flag = 0;
+        if (r_sqr <= SQR(swb)) {
+          if (j < atom->nlocal) flag = 1;
+          else if (tag[i] < tag[j]) flag = 1;
+          else if (tag[i] == tag[j]) {
+            if (dz > EPSILON) flag = 1;
+            else if (fabs(dz) < EPSILON) {
+              if (dy > EPSILON) flag = 1;
+              else if (fabs(dy) < EPSILON && dx > EPSILON)
+                flag = 1;
+            }
+          }
+        }
 
-        flag = Hflag(i, j); // TODO Cleanup
+        // flag = Hflag(i, j); // TODO Cleanup
 
         if (flag) {
 
           // TODO Cleanup dx, dy, dz, r_sqr
-          dx = x[j][0] - x[i][0];
-          dy = x[j][1] - x[i][1];
-          dz = x[j][2] - x[i][2];
-          r_sqr = SQR(dx) + SQR(dy) + SQR(dz);
+          // dx = x[j][0] - x[i][0];
+          // dy = x[j][1] - x[i][1];
+          // dz = x[j][2] - x[i][2];
+          // r_sqr = SQR(dx) + SQR(dy) + SQR(dz);
 
           H.jlist[m_fill] = j; // local index of last flagged neighbour atom
           H.ilist[m_fill] = i; // local index of current owned atom
@@ -739,34 +739,46 @@ void FixQEqReaxFF::compute_H()
 
 /* ---------------------------------------------------------------------- */
 
+// double FixQEqReaxFF::calculate_rsqr(int i, int j) const {
+//     double **x = atom->x;
+//     double dx = x[j][0] - x[i][0];
+//     double dy = x[j][1] - x[i][1];
+//     double dz = x[j][2] - x[i][2];
+
+//     double r_sqr = SQR(dx) + SQR(dy) + SQR(dz);
+//     return r_sqr;
+// }
+
+/* ---------------------------------------------------------------------- */
+
 // TODO Cleanup
-bool FixQEqReaxFF::Hflag(int i, int j) {
+// bool FixQEqReaxFF::Hflag(int i, int j) const {
 
-    double **x = atom->x;
-    tagint *tag = atom->tag;
-    constexpr double EPSILON = 0.0001;
+//     double **x = atom->x;
+//     tagint *tag = atom->tag;
+//     constexpr double EPSILON = 0.0001;
 
-    double dx = x[j][0] - x[i][0];
-    double dy = x[j][1] - x[i][1];
-    double dz = x[j][2] - x[i][2];
-    double r_sqr = SQR(dx) + SQR(dy) + SQR(dz);
+//     double dx = x[j][0] - x[i][0];
+//     double dy = x[j][1] - x[i][1];
+//     double dz = x[j][2] - x[i][2];
+//     double r_sqr = SQR(dx) + SQR(dy) + SQR(dz);
 
-    bool flag = 0;
-    if (r_sqr <= SQR(swb)) {
-      if (j < atom->nlocal) flag = 1;
-      else if (tag[i] < tag[j]) flag = 1;
-      else if (tag[i] == tag[j]) {
-        if (dz > EPSILON) flag = 1;
-        else if (fabs(dz) < EPSILON) {
-          if (dy > EPSILON) flag = 1;
-          else if (fabs(dy) < EPSILON && dx > EPSILON)
-            flag = 1;
-        }
-      }
-    }
+//     bool flag = 0;
+//     if (r_sqr <= SQR(swb)) {
+//       if (j < atom->nlocal) flag = 1;
+//       else if (tag[i] < tag[j]) flag = 1;
+//       else if (tag[i] == tag[j]) {
+//         if (dz > EPSILON) flag = 1;
+//         else if (fabs(dz) < EPSILON) {
+//           if (dy > EPSILON) flag = 1;
+//           else if (fabs(dy) < EPSILON && dx > EPSILON)
+//             flag = 1;
+//         }
+//       }
+//     }
 
-    return flag;
-}
+//     return flag;
+// }
 
 /* ---------------------------------------------------------------------- */
 
