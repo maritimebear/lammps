@@ -72,7 +72,7 @@ class FixACKS2ReaxFF : public FixQEqReaxFF {
   void init_matvec() override;
   void compute_X();
   // bool Xflag(int, int); // TODO Cleanup
-  double calculate_X(double, double);
+  double calculate_X(double, double) const;
   void calculate_Q() override;
 
   int BiCGStab(double *, double *);

@@ -622,7 +622,7 @@ void FixACKS2ReaxFF::compute_X()
 
 /* ---------------------------------------------------------------------- */
 
-double FixACKS2ReaxFF::calculate_X(double r, double bcut)
+double FixACKS2ReaxFF::calculate_X(double r, double bcut) const
 {
   double d = r/bcut;
   double d3 = d*d*d;

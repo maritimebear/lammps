@@ -114,8 +114,8 @@ class FixQEqReaxFF : public Fix {
   virtual void init_matvec();
   void init_H();
   virtual void compute_H();
-  double calculate_H(double, double);
   // bool Hflag(int, int) const ;
+  double calculate_H(double, double) const;
   virtual void calculate_Q();
 
   virtual int CG(double *, double *);

@@ -782,7 +782,7 @@ void FixQEqReaxFF::compute_H()
 
 /* ---------------------------------------------------------------------- */
 
-double FixQEqReaxFF::calculate_H(double r, double gamma)
+double FixQEqReaxFF::calculate_H(double r, double gamma) const
 {
   double Taper, denom;
 
