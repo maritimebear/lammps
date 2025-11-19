@@ -32,6 +32,32 @@ struct crs_matrix {
     std::vector<double> val;
     std::vector<size_t> col_ind;
     std::vector<size_t> row_ptr;
+
+    size_t nrows() const {
+        return row_ptr.size() - 1;
+    }
+
+    void print_to_file(const std::string& filename, bool print_symmetric_entry = false) {
+        // Print sparse matrix to text file
+        FILE* file_handle = fopen(filename.c_str(), "w");
+
+        // Header
+        fprintf(file_handle, "%6s %6s %24s\n", "row", "col", "val");
+
+        for (size_t row = 0; row < this->nrows(); ++row) {
+            for (size_t idx_nnz = row_ptr[row]; idx_nnz < row_ptr[row + 1]; ++idx_nnz) {
+                fprintf(file_handle, "%6ld %6ld %24.15f\n", row, col_ind[idx_nnz], val[idx_nnz]);
+                if (print_symmetric_entry) {
+                    if (row != col_ind[idx_nnz]) { // Avoid diagonal entries
+                        fprintf(file_handle, "%6ld %6ld %24.15f\n", col_ind[idx_nnz], row, val[idx_nnz]);
+                    }
+                }
+            }
+        }
+
+        return;
+    }
+
 };
 
 class FixACKS2ReaxFF : public FixQEqReaxFF {
@@ -63,6 +89,7 @@ class FixACKS2ReaxFF : public FixQEqReaxFF {
 
   // TODO remove test/debug variables
   bool print_system;
+  bool print_acks2_matrix;
   std::vector<double> vec_b_s;
   std::vector<double> vec_s;
   std::vector<double> vec_H_diag;

@@ -104,6 +104,7 @@ FixACKS2ReaxFF::FixACKS2ReaxFF(LAMMPS *lmp, int narg, char **arg) :
 
   // TODO remove test/debug variables
   print_system = false;
+  print_acks2_matrix = true;
   vec_b_s = {};
   vec_s = {};
   vec_H_diag = {};
@@ -1100,6 +1101,14 @@ int FixACKS2ReaxFF::_ACKS2BiCGStab(double* b, double* x, double rhotol, int maxi
 
     // Assemble matrix
     crs_matrix acks2_matrix = assemble_acks2_matrix(tag_map);
+
+
+    if (print_acks2_matrix) {
+      acks2_matrix.print_to_file(append_timestep("acks2matrix."), true); // second argument: print symmetric entries
+    }
+
+    printf("nlocal: %d\n", atom->nlocal);
+    printf("Sparse matrix nrows: %ld\n", acks2_matrix.nrows());
 
 
 
