@@ -133,6 +133,7 @@ class FixACKS2ReaxFF : public FixQEqReaxFF {
   void compare_vectors(std::vector<double>&, std::vector<double>&) const;
   std::unordered_map<int, int> construct_tag_map() const;
   crs_matrix assemble_acks2_matrix(const std::unordered_map<int, int>&) const;
+  crs_matrix __assemble_acks2_matrix(const std::unordered_map<int, int>&) const;
 
   template <typename T>
   std::vector<size_t> sort_permutation(const std::vector<T>& vec_to_sort) const {
