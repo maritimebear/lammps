@@ -55,6 +55,7 @@ struct crs_matrix {
             }
         }
 
+        fclose(file_handle);
         return;
     }
 
