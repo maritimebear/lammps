@@ -104,7 +104,7 @@ FixACKS2ReaxFF::FixACKS2ReaxFF(LAMMPS *lmp, int narg, char **arg) :
 
   // TODO remove test/debug variables
   print_system = false;
-  print_acks2_matrix = true;
+  print_acks2_matrix = false;
   vec_b_s = {};
   vec_s = {};
   vec_H_diag = {};
@@ -1193,78 +1193,78 @@ crs_matrix FixACKS2ReaxFF::assemble_acks2_matrix(const std::unordered_map<int, i
 
 /* ---------------------------------------------------------------------- */
 
-crs_matrix FixACKS2ReaxFF::__assemble_acks2_matrix(const std::unordered_map<int, int>& tag_map) const {
-    crs_matrix matrix;
-    int idx_nnz = 0; // Index of non-zero entries in crs_matrix
+// crs_matrix FixACKS2ReaxFF::__assemble_acks2_matrix(const std::unordered_map<int, int>& tag_map) const {
+//     crs_matrix matrix;
+//     int idx_nz = 0; // Index of non-zero entries in crs_matrix
 
-    // crs_matrix to be accessed (in both rows and columns) in order of increasing atom tag
-    // All the LAMMPS data structures are in terms of local atom indices, which have a different ordering that can also change over time
-    // So, the permutation of the local indices that yields atoms in increasing order of tags is needed
+//     // crs_matrix to be accessed (in both rows and columns) in order of increasing atom tag
+//     // All the LAMMPS data structures are in terms of local atom indices, which have a different ordering that can also change over time
+//     // So, the permutation of the local indices that yields atoms in increasing order of tags is needed
 
-    // Create vector of atom tags, then get indices that yield increasing order of tags
-    std::vector<size_t> row_tags;
-    row_tags.reserve(atom->nlocal); // Reserve and push back since (atom->mask & groupbit) check remains
-    for (int ii = 0; ii < atom->nlocal; ++ii) {
-        int i = ilist[ii];
-        if (atom->mask[i] & groupbit) {
-            row_tags.push_back(atom->tag[i]);
-        }
-    }
-    const std::vector<size_t> row_order = sort_permutation(row_tags); // Order to access rows
+//     // Create vector of atom tags, then get indices that yield increasing order of tags
+//     std::vector<size_t> row_tags;
+//     row_tags.reserve(atom->nlocal); // Reserve and push back since (atom->mask & groupbit) check remains
+//     for (int ii = 0; ii < atom->nlocal; ++ii) {
+//         int i = ilist[ii];
+//         if (atom->mask[i] & groupbit) {
+//             row_tags.push_back(atom->tag[i]);
+//         }
+//     }
+//     const std::vector<size_t> row_order = sort_permutation(row_tags); // Order to access rows
 
 
-    for (int crs_row = 0; crs_row < atom->nlocal; ++crs_row) {
+//     for (int crs_row = 0; crs_row < atom->nlocal; ++crs_row) {
 
-        int i = tag_map.at(row_tags[row_order[crs_row]]); // LAMMPS convention, i: local atom index, j: local neighbour atom index
+//         int i = tag_map.at(row_tags[row_order[crs_row]]); // LAMMPS convention, i: local atom index, j: local neighbour atom index
 
-        if (atom->mask[i] & groupbit) {
+//         if (atom->mask[i] & groupbit) {
 
-            matrix.row_ptr.push_back(idx_nnz); // Entering new row; append current position to row_ptr
+//             matrix.row_ptr.push_back(idx_nz); // Entering new row; append current position to row_ptr
 
-            // QEq/H block, shape: nlocal x nlocal
+//             // QEq/H block, shape: nlocal x nlocal
 
-            if (H.numnbrs[i] > atom->nlocal) { // Sanity check
-                error->all(FLERR, Error::NOLASTLINE, "numnbrs: {}, atom->nlocal: {}", H.numnbrs[i], atom->nlocal);
-            }
+//             if (H.numnbrs[i] > atom->nlocal) { // Sanity check
+//                 error->all(FLERR, Error::NOLASTLINE, "numnbrs: {}, atom->nlocal: {}", H.numnbrs[i], atom->nlocal);
+//             }
 
-            // Get indices and tags of neighbours, values from sparse_matrix H
-            std::vector<int> idxs_neighbours;
-            std::vector<int> tags_columns;
-            std::vector<double> vals_H;
-            idxs_neighbours.reserve(H.numnbrs[i]);
-            tags_columns.reserve(H.numnbrs[i] + 1); // +1 for diagonal entry
-            vals_H.reserve(H.numnbrs[i] + 1);
-            for (int itr_j = H.firstnbr[i]; itr_j < H.firstnbr[i] + H.numnbrs[i]; ++itr_j) {
-                int j = H.jlist[itr_j]; // j: local index of neighbour atom
-                idxs_neighbours.push_back(j);
-                tags_columns.push_back(atom->tag[j]);
-                vals_H.push_back(H.val[itr_j]);
-            }
+//             // Get indices and tags of neighbours, values from sparse_matrix H
+//             std::vector<int> idxs_neighbours;
+//             std::vector<int> tags_columns;
+//             std::vector<double> vals_H;
+//             idxs_neighbours.reserve(H.numnbrs[i]);
+//             tags_columns.reserve(H.numnbrs[i] + 1); // +1 for diagonal entry
+//             vals_H.reserve(H.numnbrs[i] + 1);
+//             for (int itr_j = H.firstnbr[i]; itr_j < H.firstnbr[i] + H.numnbrs[i]; ++itr_j) {
+//                 int j = H.jlist[itr_j]; // j: local index of neighbour atom
+//                 idxs_neighbours.push_back(j);
+//                 tags_columns.push_back(atom->tag[j]);
+//                 vals_H.push_back(H.val[itr_j]);
+//             }
 
-            // Handle diagonal entry
-            int current_tag = atom->tag[i];
-            bool found_diagonal = false;
-            for (size_t _i = 0; _i < tags_columns.size(); ++_i) { // TODO: Probably redundant, as ReaxFF doesn't store diagonal entries in sparse_matrix
-                if (tags_columns[_i] == current_tag) {
-                    vals_H[_i] = eta[atom->type[i]]; // Diagonal entry of H block
-                    found_diagonal = true;
-                }
-            }
-            if (!found_diagonal) {
-                tags_columns.push_back(current_tag);
-                vals_H.push_back(eta[atom->type[i]]);
-            }
+//             // Handle diagonal entry
+//             int current_tag = atom->tag[i];
+//             bool found_diagonal = false;
+//             for (size_t _i = 0; _i < tags_columns.size(); ++_i) { // TODO: Probably redundant, as ReaxFF doesn't store diagonal entries in sparse_matrix
+//                 if (tags_columns[_i] == current_tag) {
+//                     vals_H[_i] = eta[atom->type[i]]; // Diagonal entry of H block
+//                     found_diagonal = true;
+//                 }
+//             }
+//             if (!found_diagonal) {
+//                 tags_columns.push_back(current_tag);
+//                 vals_H.push_back(eta[atom->type[i]]);
+//             }
 
-            // Find indices to access vectors in increasing order of atom tags, as crs_matrix columns must be accessed in this order
-            const std::vector<size_t> column_order = sort_permutation(tags_columns);
+//             // Find indices to access vectors in increasing order of atom tags, as crs_matrix columns must be accessed in this order
+//             const std::vector<size_t> column_order = sort_permutation(tags_columns);
 
-            // Grow crs_matrix members, add values for this row
+//             // Grow crs_matrix members, add values for this row
 
-        }
-    }
+//         }
+//     }
 
-    return matrix;
-}
+//     return matrix;
+// }
 
 /* ---------------------------------------------------------------------- */
 
@@ -1289,8 +1289,8 @@ int FixACKS2ReaxFF::_ACKS2BiCGStab(double* b, double* x, double rhotol, int maxi
       acks2_matrix.print_to_file(append_timestep("acks2matrix."), true); // second argument: print symmetric entries
     }
 
-    printf("nlocal: %d\n", atom->nlocal);
-    printf("Sparse matrix nrows: %ld\n", acks2_matrix.nrows());
+    // printf("nlocal: %d\n", atom->nlocal);
+    // printf("Sparse matrix nrows: %ld\n", acks2_matrix.nrows());
 
 
 
