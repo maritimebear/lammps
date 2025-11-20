@@ -146,7 +146,20 @@ class FixACKS2ReaxFF : public FixQEqReaxFF {
       return indices;
   }
 
+  template <typename T>
+  std::vector<double> crs_mvm(const crs_matrix& A, const std::vector<T>& x) const {
+      // CRS matrix-vector product
 
+      std::vector<double> Ax(A.nrows(), 0.0);
+      for (size_t row = 0; row < A.nrows(); ++row) {
+          for (size_t idx_nz = A.row_ptr[row]; idx_nz < A.row_ptr[row+1]; ++idx_nz) {
+              size_t col = A.col_ind[idx_nz];
+              Ax[row] += (A.val[idx_nz] * x[col]);
+              Ax[col] += (A.val[idx_nz] * x[row]); // Symmetric entry
+          }
+      }
+      return Ax;
+  }
 
   bool array_vec_equal(double*, const std::vector<double>&);
   bool diag_vec_equal(double*, const std::vector<double>&);
