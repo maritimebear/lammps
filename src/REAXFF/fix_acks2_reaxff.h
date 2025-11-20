@@ -45,11 +45,11 @@ struct crs_matrix {
         fprintf(file_handle, "%6s %6s %24s\n", "row", "col", "val");
 
         for (size_t row = 0; row < this->nrows(); ++row) {
-            for (size_t idx_nnz = row_ptr[row]; idx_nnz < row_ptr[row + 1]; ++idx_nnz) {
-                fprintf(file_handle, "%6ld %6ld %24.15f\n", row, col_ind[idx_nnz], val[idx_nnz]);
+            for (size_t idx_nz = row_ptr[row]; idx_nz < row_ptr[row + 1]; ++idx_nz) {
+                fprintf(file_handle, "%6ld %6ld %24.15f\n", row, col_ind[idx_nz], val[idx_nz]);
                 if (print_symmetric_entry) {
-                    if (row != col_ind[idx_nnz]) { // Avoid diagonal entries
-                        fprintf(file_handle, "%6ld %6ld %24.15f\n", col_ind[idx_nnz], row, val[idx_nnz]);
+                    if (row != col_ind[idx_nz]) { // Avoid diagonal entries
+                        fprintf(file_handle, "%6ld %6ld %24.15f\n", col_ind[idx_nz], row, val[idx_nz]);
                     }
                 }
             }

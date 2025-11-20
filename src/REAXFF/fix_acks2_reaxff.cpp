@@ -817,7 +817,7 @@ void FixACKS2ReaxFF::copy_array_to_vector(double* array, std::vector<double>& ve
         int _i = ilist[_ii];
         if (atom->mask[_i] & groupbit) {
             int atom_ID = atom->tag[_i] - 1;
-            vector.at(atom_ID) = array[_i];
+            vector.at(atom_ID) = array[_i]; // TODO: Remove bounds check
         }
     }
 
@@ -864,7 +864,7 @@ std::unordered_map<int, int> FixACKS2ReaxFF::construct_tag_map() const {
 crs_matrix FixACKS2ReaxFF::assemble_acks2_matrix(const std::unordered_map<int, int>& tag_map) const {
 
     crs_matrix matrix;
-    int idx_nnz = 0; // Index of non-zero entries in crs_matrix
+    int idx_nz = 0; // Index of non-zero entries in crs_matrix
 
     // From FixQEqReaxFF::compute_H()
     double **x = atom->x;
@@ -881,7 +881,7 @@ crs_matrix FixACKS2ReaxFF::assemble_acks2_matrix(const std::unordered_map<int, i
         
         if (atom->mask[i] & groupbit) {
 
-            matrix.row_ptr.push_back(idx_nnz); // Entering new row; append current position to row_ptr;
+            matrix.row_ptr.push_back(idx_nz); // Entering new row; append current position to row_ptr;
 
             // QEq/H block: columns 0 to natoms - 1, copy from ReaxFF data structures
 
@@ -911,7 +911,7 @@ crs_matrix FixACKS2ReaxFF::assemble_acks2_matrix(const std::unordered_map<int, i
             // Insert row into crs_matrix
             matrix.col_ind.insert(matrix.col_ind.end(), idxs_crs_cols.begin(), idxs_crs_cols.end());
             matrix.val.insert(matrix.val.end(), vals_H.begin(), vals_H.end());
-            idx_nnz += vals_H.size();
+            idx_nz += vals_H.size();
 
 
 
@@ -920,7 +920,7 @@ crs_matrix FixACKS2ReaxFF::assemble_acks2_matrix(const std::unordered_map<int, i
             //     if (crs_col == crs_row) { // Diagonal entry
             //         matrix.col_ind.push_back(crs_col);
             //         matrix.val.push_back(eta[atom->type[i]]);
-            //         ++idx_nnz;
+            //         ++idx_nz;
             //     } else {
             //         int j = tag_map.at(crs_col + 1); // ReaxFF local index of neighbour atom
 
@@ -946,7 +946,7 @@ crs_matrix FixACKS2ReaxFF::assemble_acks2_matrix(const std::unordered_map<int, i
             //         if (flag) {
             //             matrix.col_ind.push_back(crs_col);
             //             matrix.val.push_back(calculate_H(sqrt(r_sqr), shld[atom->type[i]][atom->type[j]]));
-            //             ++idx_nnz;
+            //             ++idx_nz;
             //         }
 
             //     }
@@ -956,14 +956,14 @@ crs_matrix FixACKS2ReaxFF::assemble_acks2_matrix(const std::unordered_map<int, i
             // First Identity block: columns natoms to 2*natoms - 1
             matrix.col_ind.push_back(crs_row + atom->nlocal); // column index of identity diagonal == row index + width of H block
             matrix.val.push_back(1.0);
-            ++idx_nnz;
+            ++idx_nz;
 
             // Column of zeros: column 2*natoms, skip
 
             // Column of ones: (final) column 2*natoms + 1, rows 0 to natoms - 1
             matrix.col_ind.push_back(2*atom->nlocal + 1); // column index == width of preceding blocks
             matrix.val.push_back(1.0);
-            ++idx_nnz;
+            ++idx_nz;
 
 
         } // (atom->mask[i] & groupbit)
@@ -977,7 +977,7 @@ crs_matrix FixACKS2ReaxFF::assemble_acks2_matrix(const std::unordered_map<int, i
         
         if (atom->mask[i] & groupbit) {
 
-            matrix.row_ptr.push_back(idx_nnz);
+            matrix.row_ptr.push_back(idx_nz);
 
             // Second Identity block: columns 0 to natoms - 1, skipped since not in upper right triangle
 
@@ -986,7 +986,7 @@ crs_matrix FixACKS2ReaxFF::assemble_acks2_matrix(const std::unordered_map<int, i
                 if (crs_col == crs_row) { // Diagonal entry
                     matrix.col_ind.push_back(crs_col);
                     matrix.val.push_back(X_diag[i]);
-                    ++idx_nnz;
+                    ++idx_nz;
                 } else {
                     int j = tag_map.at(crs_col - atom->nlocal + 1);
 
@@ -1016,7 +1016,7 @@ crs_matrix FixACKS2ReaxFF::assemble_acks2_matrix(const std::unordered_map<int, i
                             double X_val = calculate_X(sqrt(r_sqr), bcutoff);
                             matrix.col_ind.push_back(crs_col);
                             matrix.val.push_back(X_val);
-                            ++idx_nnz;
+                            ++idx_nz;
                             // TODO: Subtract X_val from diagonal entry? PuReMD?
                         }
                     }
@@ -1027,7 +1027,7 @@ crs_matrix FixACKS2ReaxFF::assemble_acks2_matrix(const std::unordered_map<int, i
             // Column of ones: column 2*natoms, rows natoms to 2*natoms - 1
             matrix.col_ind.push_back(2*atom->nlocal);
             matrix.val.push_back(1.0);
-            ++idx_nnz;
+            ++idx_nz;
 
             // Column of zeros: (final) column 2*natoms + 1, skip
 
@@ -1036,7 +1036,7 @@ crs_matrix FixACKS2ReaxFF::assemble_acks2_matrix(const std::unordered_map<int, i
 
     // Last two rows: zeros in upper right triangle, skip
 
-    matrix.row_ptr.push_back(idx_nnz);
+    matrix.row_ptr.push_back(idx_nz);
 
     return matrix;
 }
@@ -1046,7 +1046,7 @@ crs_matrix FixACKS2ReaxFF::assemble_acks2_matrix(const std::unordered_map<int, i
 // crs_matrix FixACKS2ReaxFF::assemble_acks2_matrix(const std::unordered_map<int, int>& tag_map) const {
 
 //     crs_matrix matrix;
-//     int idx_nnz = 0; // Index of non-zero entries in crs_matrix
+//     int idx_nz = 0; // Index of non-zero entries in crs_matrix
 
 //     // From FixQEqReaxFF::compute_H()
 //     double **x = atom->x;
@@ -1063,14 +1063,14 @@ crs_matrix FixACKS2ReaxFF::assemble_acks2_matrix(const std::unordered_map<int, i
         
 //         if (atom->mask[i] & groupbit) {
 
-//             matrix.row_ptr.push_back(idx_nnz); // Entering new row; append current position to row_ptr;
+//             matrix.row_ptr.push_back(idx_nz); // Entering new row; append current position to row_ptr;
 
 //             // QEq/H block: columns 0 to natoms - 1
 //             for (int crs_col = crs_row; crs_col < atom->nlocal; ++ crs_col) { // Only storing upper right triangle since matrix is symmetric: columns start from diagonal
 //                 if (crs_col == crs_row) { // Diagonal entry
 //                     matrix.col_ind.push_back(crs_col);
 //                     matrix.val.push_back(eta[atom->type[i]]);
-//                     ++idx_nnz;
+//                     ++idx_nz;
 //                 } else {
 //                     int j = tag_map.at(crs_col + 1); // ReaxFF local index of neighbour atom
 
@@ -1096,7 +1096,7 @@ crs_matrix FixACKS2ReaxFF::assemble_acks2_matrix(const std::unordered_map<int, i
 //                     if (flag) {
 //                         matrix.col_ind.push_back(crs_col);
 //                         matrix.val.push_back(calculate_H(sqrt(r_sqr), shld[atom->type[i]][atom->type[j]]));
-//                         ++idx_nnz;
+//                         ++idx_nz;
 //                     }
 
 //                 }
@@ -1106,14 +1106,14 @@ crs_matrix FixACKS2ReaxFF::assemble_acks2_matrix(const std::unordered_map<int, i
 //             // First Identity block: columns natoms to 2*natoms - 1
 //             matrix.col_ind.push_back(crs_row + atom->nlocal); // column index of identity diagonal == row index + width of H block
 //             matrix.val.push_back(1.0);
-//             ++idx_nnz;
+//             ++idx_nz;
 
 //             // Column of zeros: column 2*natoms, skip
 
 //             // Column of ones: (final) column 2*natoms + 1, rows 0 to natoms - 1
 //             matrix.col_ind.push_back(2*atom->nlocal + 1); // column index == width of preceding blocks
 //             matrix.val.push_back(1.0);
-//             ++idx_nnz;
+//             ++idx_nz;
 
 
 //         } // (atom->mask[i] & groupbit)
@@ -1127,7 +1127,7 @@ crs_matrix FixACKS2ReaxFF::assemble_acks2_matrix(const std::unordered_map<int, i
         
 //         if (atom->mask[i] & groupbit) {
 
-//             matrix.row_ptr.push_back(idx_nnz);
+//             matrix.row_ptr.push_back(idx_nz);
 
 //             // Second Identity block: columns 0 to natoms - 1, skipped since not in upper right triangle
 
@@ -1136,7 +1136,7 @@ crs_matrix FixACKS2ReaxFF::assemble_acks2_matrix(const std::unordered_map<int, i
 //                 if (crs_col == crs_row) { // Diagonal entry
 //                     matrix.col_ind.push_back(crs_col);
 //                     matrix.val.push_back(X_diag[i]);
-//                     ++idx_nnz;
+//                     ++idx_nz;
 //                 } else {
 //                     int j = tag_map.at(crs_col - atom->nlocal + 1);
 
@@ -1166,7 +1166,7 @@ crs_matrix FixACKS2ReaxFF::assemble_acks2_matrix(const std::unordered_map<int, i
 //                             double X_val = calculate_X(sqrt(r_sqr), bcutoff);
 //                             matrix.col_ind.push_back(crs_col);
 //                             matrix.val.push_back(X_val);
-//                             ++idx_nnz;
+//                             ++idx_nz;
 //                             // TODO: Subtract X_val from diagonal entry? PuReMD?
 //                         }
 //                     }
@@ -1177,7 +1177,7 @@ crs_matrix FixACKS2ReaxFF::assemble_acks2_matrix(const std::unordered_map<int, i
 //             // Column of ones: column 2*natoms, rows natoms to 2*natoms - 1
 //             matrix.col_ind.push_back(2*atom->nlocal);
 //             matrix.val.push_back(1.0);
-//             ++idx_nnz;
+//             ++idx_nz;
 
 //             // Column of zeros: (final) column 2*natoms + 1, skip
 
@@ -1186,7 +1186,7 @@ crs_matrix FixACKS2ReaxFF::assemble_acks2_matrix(const std::unordered_map<int, i
 
 //     // Last two rows: zeros in upper right triangle, skip
 
-//     matrix.row_ptr.push_back(idx_nnz);
+//     matrix.row_ptr.push_back(idx_nz);
 
 //     return matrix;
 // }
