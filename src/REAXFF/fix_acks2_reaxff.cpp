@@ -1711,6 +1711,72 @@ int FixACKS2ReaxFF::CRS_BiCGStab(const crs_matrix& A, std::vector<double>& x, co
 
 /* ---------------------------------------------------------------------- */
 
+int FixACKS2ReaxFF::CRS_CG(const crs_matrix& A, std::vector<double>& x, const std::vector<double>& b, double tolerance, double rhotol, int maxiters) const {
+    // CG using CRS matrix and std::vectors
+    // Returns iteration count
+    // Templates for the Solution of Linear Systems: Building Blocks for Iterative Methods, Figure 2.5
+
+    double bnorm = norm(b);
+    if (bnorm == 0.0) {
+        error->warning(FLERR, "CG(): ||b|| == 0.0, b == zero vector?");
+        return 0;
+    }
+
+    std::vector<double> r = b - crs_mvm(A, x);
+    // Convergence check
+    double rnorm0 = norm(r);
+    if (rnorm0 < bnorm * tolerance) {
+        return 0;
+    }
+
+    // Variables declared here since referenced in loop before assignment
+    double rho_old;
+    std::vector<double> p;
+
+    for (int iter = 1; iter < maxiters; ++iter) {
+        // TODO Preconditioning: z = M^1 * r
+        std::vector<double> z = r;
+
+        double rho = inner_product(r, z);
+        if (fabs(rho) < rhotol) {
+            error->warning(FLERR, "BiCGStab(): |rho| = {:.2} < rhotol = {:.2}", fabs(rho), rhotol);
+            break;
+        }
+
+        if (iter == 1) {
+            p = z;
+        } else {
+            double beta = rho / rho_old;
+            p = z + (beta * p);
+        }
+
+        std::vector<double> q = crs_mvm(A, p);
+
+        double pq = inner_product(p, q);
+        if (fabs(pq) < rhotol) {
+            error->warning(FLERR, "CG(): |<p, q>|= {:.2} < rhotol = {:.2}", fabs(pq), rhotol);
+            break;
+        }
+
+        double alpha = rho / pq;
+
+        x = x + (alpha * p);
+
+        r = r - (alpha * q);
+
+        double rnorm = norm(r);
+        if (rnorm < rnorm0 * tolerance) {
+            return iter;
+        }
+
+        rho_old = rho;
+    }
+
+
+    return -1; // Only in case of numerical breakdown inside iteration loop
+}
+/* ---------------------------------------------------------------------- */
+
 int FixACKS2ReaxFF::BiCGStab_NoComm(double* b, double* x, double rhotol, int maxiters) {
 
     int i = 0;
