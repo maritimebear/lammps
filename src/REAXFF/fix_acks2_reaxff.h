@@ -27,7 +27,6 @@ FixStyle(acks2/reaxff,FixACKS2ReaxFF);
 #include <numeric>
 #include "crs_matrix.h"
 #include "vector_utils.h"
-#include "linear_solvers.h"
 
 namespace LAMMPS_NS {
 
