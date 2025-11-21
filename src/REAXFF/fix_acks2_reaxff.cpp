@@ -1293,13 +1293,25 @@ int FixACKS2ReaxFF::_ACKS2BiCGStab(double* b, double* x, double rhotol, int maxi
     // Assemble matrix
     crs_matrix acks2_matrix = assemble_acks2_matrix(tag_map);
 
+    printf("natoms: %ld\n", atom->natoms);
+    printf("nlocal: %d\n", atom->nlocal);
+    printf("acks2_matrix.nrows: %ld\n", acks2_matrix.nrows());
+    printf("acks2_matrix.ncols: %ld\n", acks2_matrix.ncols());
+    printf("acks2_matrix.nnz: %ld\n", acks2_matrix.nnz());
+
 
     if (print_acks2_matrix) {
       acks2_matrix.print_to_file(append_timestep("acks2matrix."), true); // second argument: print symmetric entries
     }
 
+    int _iters = CRS_BiCGStab<int>(acks2_matrix, vx, vb, tolerance, rhotol, maxiters);
+
+    printf("CRS_BiCGStab: i: %d, xnorm2: %f\n", _iters, std::inner_product(vx.begin(), vx.end(), vx.begin(), 0.0));
+
     // printf("nlocal: %d\n", atom->nlocal);
     // printf("Sparse matrix nrows: %ld\n", acks2_matrix.nrows());
+
+
 
 
 
