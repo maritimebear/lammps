@@ -772,14 +772,16 @@ int FixACKS2ReaxFF::RestartedBiCGStab(double* b, double* x, double rhotol, int r
     int n_iters_total = 0;
 
     double xnorm_0 = parallel_norm(x, nn);
-    printf("xnorm_0: %f\n", xnorm_0);
+    double bnorm_0 = parallel_norm(b, nn);
+    // printf("xnorm_0: %f\n", xnorm_0);
+    // printf("bnorm_0: %f\n", bnorm_0);
 
     for (int n = 0; n < n_restarts; ++n) {
         // printf("n: %d\n", n);
         // int return_code = ACKS2BiCGStab(b, x, rhotol, restart_interval);
         int return_code = _ACKS2BiCGStab(b, x, rhotol, restart_interval);
         double xnorm = parallel_norm(x, nn);
-        printf("xnorm: %f\n", xnorm);
+        // printf("xnorm: %f\n", xnorm);
         if (return_code == -1) {
             n_iters_total += restart_interval;
             continue;
@@ -821,6 +823,75 @@ void FixACKS2ReaxFF::copy_array_to_vector(double* array, std::vector<double>& ve
         }
     }
 
+}
+
+/* ---------------------------------------------------------------------- */
+
+std::vector<double> FixACKS2ReaxFF::construct_acks2_rhs(double* reaxff_rhs) const {
+    // Returns rhs vector in ACKS2 system
+    std::vector<double> rhs(2*atom->nlocal + 2, 0.0); // Only 0:natoms entries are non-zero
+
+    for (int ii = 0; ii < atom->nlocal; ++ii) {
+        int i = ilist[ii];
+        if (atom->mask[i] & groupbit) {
+            int atom_ID = atom->tag[i] - 1;
+            rhs.at(atom_ID) = reaxff_rhs[i]; // TODO: Remove bounds check
+        }
+    }
+
+    return rhs;
+}
+
+/* ---------------------------------------------------------------------- */
+
+std::vector<double> FixACKS2ReaxFF::array_to_vector(double* reaxff_array) const {
+    // Construct std::vector from ReaxFF array, copying values to correct locations by atom tag
+    std::vector<double> vec(2*atom->nlocal + 2, 0.0);
+
+    for (int ii = 0; ii < atom->nlocal; ++ii) {
+        int i = ilist[ii];
+        if (atom->mask[i] & groupbit) {
+            int tag = atom->tag[i] - 1;
+            // TODO Remove bounds checks
+            vec.at(tag) = reaxff_array[i];
+            vec.at(tag + atom->nlocal) = reaxff_array[NN + i]; // ACKS2-specific part
+        }
+    }
+
+    // Last two rows
+    if (last_rows_flag) {
+        for (int i = 0; i < 2; ++i) {
+            // TODO Remove bounds checks
+            vec.at(2*atom->nlocal + i) = reaxff_array[2*NN + i];
+        }
+    }
+
+    return vec;
+}
+
+/* ---------------------------------------------------------------------- */
+
+void FixACKS2ReaxFF::vector_to_array(std::vector<double>& vec, double* reaxff_array, const std::unordered_map<int, int>& tag_map) {
+    // Copy from atom tag ordered std::vector to reaxff array
+
+    for (int row = 0; row < atom->nlocal; ++row) {
+        int i = tag_map.at(row + 1); // ReaxFF indexing convention, i: local atom index; crs_row + 1 since atom->tag[] is 1-indexed
+        if (atom->mask[i] & groupbit) {
+            // TODO Remove bounds checks
+            reaxff_array[i] = vec.at(row);
+            reaxff_array[NN + i] = vec.at(atom->nlocal + row); // ACKS2-specific part
+        }
+    }
+
+    // Last two rows
+    if (last_rows_flag) {
+        for (int _row = 0; _row < 2; ++_row) {
+            // TODO Remove bounds checks
+            reaxff_array[2*NN + _row] = vec.at(2*atom->nlocal + _row);
+        }
+    }
+
+    return;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -1280,33 +1351,43 @@ crs_matrix FixACKS2ReaxFF::assemble_acks2_matrix(const std::unordered_map<int, i
 int FixACKS2ReaxFF::_ACKS2BiCGStab(double* b, double* x, double rhotol, int maxiters) {
 
     // Initialise data structures
-    std::vector<double> vx(atom->natoms, 0.0);
-    std::vector<double> vb(atom->natoms, 0.0);
+    // std::vector<double> vb(atom->natoms, 0.0);
+    // std::vector<double> vx(atom->natoms, 0.0);
+
+    // Copy into data structures
+    // copy_array_to_vector(x, vx);
+    // copy_array_to_vector(b, vb);
+
+    std::vector<double> vx(2*atom->natoms + 2, 0.0); // TODO Copy solution vector from ReaxFF structure
+    // std::vector<double> vb = construct_acks2_rhs(b);
+    // std::vector<double> vx = array_to_vector(x);
+    std::vector<double> vb = array_to_vector(b);
+
 
     // Map of atom tag (1-indexed) : ilist index
     const std::unordered_map<int, int> tag_map = construct_tag_map();
 
-    // Copy into data structures
-    copy_array_to_vector(x, vx);
-    copy_array_to_vector(b, vb);
-
     // Assemble matrix
     crs_matrix acks2_matrix = assemble_acks2_matrix(tag_map);
 
-    printf("natoms: %ld\n", atom->natoms);
-    printf("nlocal: %d\n", atom->nlocal);
-    printf("acks2_matrix.nrows: %ld\n", acks2_matrix.nrows());
-    printf("acks2_matrix.ncols: %ld\n", acks2_matrix.ncols());
-    printf("acks2_matrix.nnz: %ld\n", acks2_matrix.nnz());
-
+    // printf("natoms: %ld\n", atom->natoms);
+    // printf("nlocal: %d\n", atom->nlocal);
+    // printf("acks2_matrix.nrows: %ld\n", acks2_matrix.nrows());
+    // printf("acks2_matrix.ncols: %ld\n", acks2_matrix.ncols());
+    // printf("acks2_matrix.nnz: %ld\n", acks2_matrix.nnz());
 
     if (print_acks2_matrix) {
       acks2_matrix.print_to_file(append_timestep("acks2matrix."), true); // second argument: print symmetric entries
     }
 
-    int _iters = CRS_BiCGStab<int>(acks2_matrix, vx, vb, tolerance, rhotol, maxiters);
+    // int _iters = CRS_BiCGStab(acks2_matrix, vx, vb, tolerance, rhotol, maxiters);
+    int _iters = CRS_CG(acks2_matrix, vx, vb, tolerance, rhotol, maxiters);
 
-    printf("CRS_BiCGStab: i: %d, xnorm2: %f\n", _iters, std::inner_product(vx.begin(), vx.end(), vx.begin(), 0.0));
+    // printf("CRS_BiCGStab: i: %d, xnorm: %f\n", _iters, norm(vx));
+
+    // Copy solution vector to reaxff array
+    vector_to_array(vx, x, tag_map);
+    return _iters;
 
     // printf("nlocal: %d\n", atom->nlocal);
     // printf("Sparse matrix nrows: %ld\n", acks2_matrix.nrows());
@@ -1532,6 +1613,100 @@ int FixACKS2ReaxFF::_ACKS2BiCGStab(double* b, double* x, double rhotol, int maxi
 
     // error->warning(FLERR, "BiCGStab() failed to converge in {} iterations, timestep: {}", i, update->ntimestep);
     return -1;
+}
+
+/* ---------------------------------------------------------------------- */
+
+int FixACKS2ReaxFF::CRS_BiCGStab(const crs_matrix& A, std::vector<double>& x, const std::vector<double>& b, double tolerance, double rhotol, int maxiters) const {
+    // BiCGStab using CRS matrix and std::vectors
+    // Returns iteration count
+    // Templates for the Solution of Linear Systems: Building Blocks for Iterative Methods, Figure 2.10
+
+    // printf("iter: 0 xnorm: %f\n", norm(x));
+
+    double bnorm = norm(b);
+    // printf("iter: 0 bnorm: %f\n", bnorm);
+    if (bnorm == 0.0) {
+        error->warning(FLERR, "BiCGStab(): ||b|| == 0.0, b == zero vector?");
+        return 0;
+    }
+
+    std::vector<double> r = b - crs_mvm(A, x);
+    // Convergence check
+    double rnorm0 = norm(r);
+    if (rnorm0 < bnorm * tolerance) {
+        return 0;
+    }
+
+    std::vector<double> rhat = r; // Shadow residual
+
+    // Variables declared here since referenced in loop before assignment
+    std::vector<double> p(x.size());
+    std::vector<double> v(x.size());
+    double rho_old, alpha, omega;
+
+    for (int iter = 1; iter < maxiters; ++iter) {
+
+        double rho = inner_product(rhat, r);
+        // printf("iter: %d rho: %f\n", iter, rho);
+        if (fabs(rho) < rhotol) {
+            error->warning(FLERR, "BiCGStab(): |rho| = {:.2} < rhotol = {:.2}", fabs(rho), rhotol);
+            break;
+        }
+
+        if (iter == 1) {
+            p = r;
+        } else {
+            double beta = (rho / rho_old) * (alpha / omega);
+            p = r + (beta * (p - (omega * v)));
+        }
+
+        // TODO preconditioning: p_hat = M^-1 * p
+        std::vector<double> p_hat = p;
+
+        v = crs_mvm(A, p_hat);
+
+        double rhat_v = inner_product(rhat, v);
+        // printf("iter: %d rhat_v: %f\n", iter, rhat_v);
+        if (fabs(rhat_v) < rhotol) {
+            error->warning(FLERR, "BiCGStab(): |<rhat, v>|= {:.2} < rhotol = {:.2}", fabs(rhat_v), rhotol);
+            break;
+        }
+
+        alpha = rho / rhat_v;
+        // printf("iter: %d alpha: %f\n", iter, alpha);
+
+        std::vector<double> s = r - (alpha * v);
+        // Convergence check
+        if (norm(s) < tolerance) {
+            x = x + (alpha * p_hat);
+            return iter;
+        }
+
+        // TODO preconditioning: s_hat = M^1 * s
+        std::vector<double> s_hat = s;
+
+        std::vector<double> t = crs_mvm(A, s_hat);
+
+        omega = inner_product(t, s) / inner_product(t, t);
+        if (fabs(omega) < rhotol) {
+            error->warning(FLERR, "BiCGStab(): |omega| = {:.2} < rhotol = {:.2}", fabs(omega), rhotol);
+            break;
+        }
+
+        x = x + ((alpha * p_hat) + (omega * s_hat));
+
+        r = s - (omega * t);
+
+        double rnorm = norm(r);
+        if (rnorm < rnorm0 * tolerance) {
+            return iter;
+        }
+
+        rho_old = rho;
+    }
+
+    return -1; // Only in case of numerical breakdown inside iteration loop
 }
 
 /* ---------------------------------------------------------------------- */
