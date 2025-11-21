@@ -1034,9 +1034,18 @@ crs_matrix FixACKS2ReaxFF::assemble_acks2_matrix(const std::unordered_map<int, i
         } // (atom->mask[i] & groupbit)
     }
 
-    // Last two rows: zeros in upper right triangle, skip
+    // Last two rows: zeros in upper right triangle
+    // Two zeros in the last two rows must be stored, in order to get the correct product vector size during MVM
+    // Storing the last two zeros on the diagonal
+    for (int crs_row = 2*atom->nlocal; crs_row < 2*atom->nlocal + 2; ++crs_row) {
+        matrix.row_ptr.push_back(idx_nz);
+        matrix.col_ind.push_back(crs_row);
+        matrix.val.push_back(0.0);
+        ++idx_nz; // Counting zeros as non-zeros just in this case
+    }
 
     matrix.row_ptr.push_back(idx_nz);
+    // printf("Assemble CRS idx_nz: %d\n", idx_nz);
 
     return matrix;
 }
