@@ -896,6 +896,39 @@ void FixACKS2ReaxFF::vector_to_array(std::vector<double>& vec, double* reaxff_ar
 
 /* ---------------------------------------------------------------------- */
 
+void FixACKS2ReaxFF::compare_array_vector(double* array, const std::vector<double>& vector, double atol) const {
+    // Compare ReaxFF array and std::vector elementwise for equality below atol
+    // Throw if fabs(array[] - vector[]) > atol, following numpy.allclose()
+
+    for (int ii = 0; ii < atom->nlocal; ++ii) {
+        int i = ilist[ii];
+        if (atom->mask[i] & groupbit) {
+            int tag = atom->tag[i] - 1;
+            double diff1 = fabs(array[i] - vector[tag]);
+            double diff2 = fabs(array[NN + i] - vector[atom->nlocal + tag]);
+            if (diff1 > atol) {
+                error->all(FLERR, Error::NOLASTLINE, "array != vector at atom i: {}, atom tag: {}", i, tag);
+            }
+            if (diff2 > atol) {
+                error->all(FLERR, Error::NOLASTLINE, "array != vector at atom NN + i: {}, atom->nlocal + tag: {}", NN + i, atom->nlocal + tag);
+            }
+        }
+    }
+
+    // Last two rows
+    if (last_rows_flag) {
+        for (int i = 0; i < 2; ++i) {
+            if (fabs(array[2*NN + i] - vector[2*atom->nlocal + i]) > atol) {
+                error->all(FLERR, Error::NOLASTLINE, "array != vector at atom 2*NN + i: {}, 2*atom->nlocal + i: {}", 2*NN + i, 2*atom->nlocal + i);
+            }
+        }
+    }
+
+    return;
+}
+
+/* ---------------------------------------------------------------------- */
+
 void FixACKS2ReaxFF::compare_vectors(std::vector<double>& v1, std::vector<double>& v2) const {
     // Print vector elements that differ
     if ((v1.size() != atom->natoms) || (v2.size() != atom->natoms)) {
@@ -1351,18 +1384,8 @@ crs_matrix FixACKS2ReaxFF::assemble_acks2_matrix(const std::unordered_map<int, i
 int FixACKS2ReaxFF::_ACKS2BiCGStab(double* b, double* x, double rhotol, int maxiters) {
 
     // Initialise data structures
-    // std::vector<double> vb(atom->natoms, 0.0);
-    // std::vector<double> vx(atom->natoms, 0.0);
-
-    // Copy into data structures
-    // copy_array_to_vector(x, vx);
-    // copy_array_to_vector(b, vb);
-
     std::vector<double> vx(2*atom->natoms + 2, 0.0); // TODO Copy solution vector from ReaxFF structure
-    // std::vector<double> vb = construct_acks2_rhs(b);
-    // std::vector<double> vx = array_to_vector(x);
     std::vector<double> vb = array_to_vector(b);
-
 
     // Map of atom tag (1-indexed) : ilist index
     const std::unordered_map<int, int> tag_map = construct_tag_map();
@@ -1370,249 +1393,206 @@ int FixACKS2ReaxFF::_ACKS2BiCGStab(double* b, double* x, double rhotol, int maxi
     // Assemble matrix
     crs_matrix acks2_matrix = assemble_acks2_matrix(tag_map);
 
-    // printf("natoms: %ld\n", atom->natoms);
-    // printf("nlocal: %d\n", atom->nlocal);
-    // printf("acks2_matrix.nrows: %ld\n", acks2_matrix.nrows());
-    // printf("acks2_matrix.ncols: %ld\n", acks2_matrix.ncols());
-    // printf("acks2_matrix.nnz: %ld\n", acks2_matrix.nnz());
-
     if (print_acks2_matrix) {
       acks2_matrix.print_to_file(append_timestep("acks2matrix."), true); // second argument: print symmetric entries
     }
 
-    // int _iters = CRS_BiCGStab(acks2_matrix, vx, vb, tolerance, rhotol, maxiters);
-    int _iters = CRS_CG(acks2_matrix, vx, vb, tolerance, rhotol, maxiters);
+    int _iters = CRS_BiCGStab(acks2_matrix, vx, vb, tolerance, rhotol, maxiters);
+    // int _iters = CRS_CG(acks2_matrix, vx, vb, tolerance, rhotol, maxiters);
+
+    // { // TODO Cleanup: Solve Ax = b using CRS and ReaxFF, compare solutions
+    //     int _iters_reaxff = ACKS2BiCGStab(b, x, rhotol, maxiters);
+
+    //     compare_array_vector(x, vx, 1.0);
+
+    //     return _iters_reaxff;
+    // }
 
     // printf("CRS_BiCGStab: i: %d, xnorm: %f\n", _iters, norm(vx));
 
     // Copy solution vector to reaxff array
     vector_to_array(vx, x, tag_map);
     return _iters;
-
-    // printf("nlocal: %d\n", atom->nlocal);
-    // printf("Sparse matrix nrows: %ld\n", acks2_matrix.nrows());
-
+    
+    
 
 
 
+    // int i = 0;
 
+    // double rho = 0.0;
+    // double beta = 0.0;
+    // double alpha = 0.0;
+    // double omega = 0.0;
+    // double rho_old = 0.0;
 
-    // std::vector<double> vx(atom->natoms, 0.0);
-    // std::vector<double> vd(atom->natoms, 0.0);
-
-    // // TODO Remove
-    // // Update owned atoms before copying into data structures
-    // // vector_copy(d, x, nn); // Copy owned atoms from x to d
-
-    // // pack_flag = 1; // Use existing reverse comm to avoid unintentional errors; 
-    // // comm->reverse_comm(this);
-    // // more_reverse_comm(d);
-
-    // copy_array_to_vector(x, vx);
-    // copy_array_to_vector(d, vd);
-
-    // compare_vectors(vx, vd);
-
-    // error->all(FLERR, Error::NOLASTLINE, "Stop");
-
-    // Copy into data structure
-    // for (int _ii = 0; _ii < atom->nlocal; ++_ii) {
-    //     int _i = ilist[_ii];
-    //     if (atom->mask[_i] & groupbit) {
-    //         int atom_ID = atom->tag[_i] - 1; // tag is 1-indexed
-    //         solution.at(atom_ID) = d[_i];
-    //     }
+    // double bnorm = parallel_norm(b, nn);
+    // if (bnorm == 0.0) {
+    //     error->warning(FLERR, "BiCGStab(): ||b|| == 0.0, b == zero vector?");
+    //     return 0;
     // }
 
-    // copy_array_to_vector(x, solution); // TODO
-    // TODO Remove
-    // for (int _ii = 0; _ii < atom->nlocal; ++_ii) {
-    //     int _i = ilist[_ii];
-    //     if (atom->mask[_i] & groupbit) {
-    //         int atom_ID = atom->tag[_i] - 1; // tag is 1-indexed
-    //         // if (solution[atom_ID] != x[_i]) error->all(FLERR, Error::NOLASTLINE, "solution[{}] != x[{}]", atom_ID, _i);
-    //         // if (solution[atom_ID] != d[_i]) error->all(FLERR, Error::NOLASTLINE, "solution[{}] != d[{}]", atom_ID, _i);
-    //         if (vx[atom_ID] != d[_i]) error->all(FLERR, Error::NOLASTLINE, "vx[{}] != d[{}]", atom_ID, _i);
-    //     }
+    // sparse_matvec_acks2(&H, &X, x, d); // TODO Uncomment
+    // pack_flag = 1;
+    // comm->reverse_comm(this);
+    // more_reverse_comm(d);
+
+    // // { // TODO Remove after testing
+    // //     // previous reverse comm has updated owned atoms at this point
+    // //     std::vector<double> test_vec(atom->natoms, 0.0);
+    // //     for (int _ii = 0; _ii < atom->nlocal; ++_ii) {
+    // //         int _i = ilist[_ii];
+    // //         if (atom->mask[_i] & groupbit) {
+    // //             int atom_ID = atom->tag[_i] - 1; // tag is 1-indexed
+    // //             test_vec.at(atom_ID) = d[_i];
+    // //         }
+    // //     }
+    // //     sparse_matvec_acks2(&H, &X, x, d);
+    // //     pack_flag = 1;
+    // //     comm->reverse_comm(this);
+    // //     more_reverse_comm(d);
+
+    // //     for (int _ii = 0; _ii < atom->nlocal; ++_ii) {
+    // //         int _i = ilist[_ii];
+    // //         if (atom->mask[_i] & groupbit) {
+    // //             int atom_ID = atom->tag[_i] - 1; // tag is 1-indexed
+    // //             if (test_vec[atom_ID] != d[_i]) error->all(FLERR, Error::NOLASTLINE, "test_vec[{}] != d[{}]", atom_ID, _i);
+    // //         }
+    // //     }
+    // // }
+
+    // vector_sum(r, 1.0, b, -1.0, d, nn);
+
+    // double rnorm = parallel_norm(r, nn);
+    // if (rnorm < bnorm * tolerance) {
+    //     return 0;
     // }
 
+    // vector_copy(r_hat, r, nn); // Shadow residual
 
+    // for (i = 1; i < maxiters; ++i) {
+    //     rho = parallel_dot(r_hat, r, nn);
+    //     if (fabs(rho) < rhotol) {
+    //         error->warning(FLERR, "BiCGStab(): |rho| = {:.2} < rhotol = {:.2}", fabs(rho), rhotol);
+    //         break;
+    //     }
 
-    int i = 0;
+    //     if (i == 1) {
+    //         vector_copy(p, r, nn);
+    //     } else {
+    //         beta = (rho / rho_old) * (alpha / omega);
+    //         vector_sum(g, 1.0, p, -omega, z, nn);
+    //         vector_sum(p, 1.0, r, beta, g, nn);
+    //     }
 
-    double rho = 0.0;
-    double beta = 0.0;
-    double alpha = 0.0;
-    double omega = 0.0;
-    double rho_old = 0.0;
-
-    double bnorm = parallel_norm(b, nn);
-    if (bnorm == 0.0) {
-        error->warning(FLERR, "BiCGStab(): ||b|| == 0.0, b == zero vector?");
-        return 0;
-    }
-
-    sparse_matvec_acks2(&H, &X, x, d); // TODO Uncomment
-    pack_flag = 1;
-    comm->reverse_comm(this);
-    more_reverse_comm(d);
-
-    // { // TODO Remove after testing
-    //     // previous reverse comm has updated owned atoms at this point
-    //     std::vector<double> test_vec(atom->natoms, 0.0);
-    //     for (int _ii = 0; _ii < atom->nlocal; ++_ii) {
-    //         int _i = ilist[_ii];
-    //         if (atom->mask[_i] & groupbit) {
-    //             int atom_ID = atom->tag[_i] - 1; // tag is 1-indexed
-    //             test_vec.at(atom_ID) = d[_i];
+    //     // pre-conditioning
+    //     for (int jj = 0; jj < nn; ++jj) {
+    //         int j = ilist[jj];
+    //         if (atom->mask[j] & groupbit) {
+    //             d[j] = p[j] * Hdia_inv[j];
+    //             d[NN + j] = p[NN + j] * Xdia_inv[j];
     //         }
     //     }
-    //     sparse_matvec_acks2(&H, &X, x, d);
-    //     pack_flag = 1;
+    //     // last two rows
+    //     if (last_rows_flag) {
+    //         d[2*NN] = p[2*NN];
+    //         d[2*NN + 1] = p[2*NN + 1];
+    //     }
+    //     pack_flag = 1; // TODO Uncomment
+    //     comm->forward_comm(this);
+    //     more_forward_comm(d);
+
+    //     // { // TODO: Remove after testing
+    //     //   // previous forward comm has updated ghost atoms at this point
+    //     //     std::vector<double> test_vec(atom->natoms, 0.0);
+    //     //     for (int _ii = 0; _ii < (atom->nlocal + atom->nghost); ++_ii) {
+    //     //         int _i = ilist[_ii];
+    //     //         if (atom->mask[_i] & groupbit) {
+    //     //             int atom_ID = atom->tag[_i] - 1; // tag is 1-indexed
+    //     //             // printf("atom_ID: %d\n", atom_ID);
+    //     //             test_vec.at(atom_ID) = d[_i];
+    //     //         }
+    //     //     }
+
+    //     //     pack_flag = 1;
+    //     //     comm->forward_comm(this);
+    //     //     more_forward_comm(d);
+
+    //     //     for (int _ii = 1500; _ii < (atom->nlocal + atom->nghost); ++_ii) {
+    //     //         int _i = ilist[_ii];
+    //     //         if (atom->mask[_i] & groupbit) {
+    //     //             int atom_ID = atom->tag[_i] - 1; // tag is 1-indexed
+    //     //             if (test_vec[atom_ID] != d[_i]) error->all(FLERR, Error::NOLASTLINE, "test_vec[{}] != d[{}]", atom_ID, _i);
+    //     //         }
+    //     //     }
+    //     // }
+
+    //     sparse_matvec_acks2(&H, &X, d, z);
+    //     pack_flag = 2;
     //     comm->reverse_comm(this);
-    //     more_reverse_comm(d);
+    //     more_reverse_comm(z);
 
-    //     for (int _ii = 0; _ii < atom->nlocal; ++_ii) {
-    //         int _i = ilist[_ii];
-    //         if (atom->mask[_i] & groupbit) {
-    //             int atom_ID = atom->tag[_i] - 1; // tag is 1-indexed
-    //             if (test_vec[atom_ID] != d[_i]) error->all(FLERR, Error::NOLASTLINE, "test_vec[{}] != d[{}]", atom_ID, _i);
+    //     double rhat_z = parallel_dot(r_hat, z, nn);
+    //     if (fabs(rhat_z) < rhotol) {
+    //         error->warning(FLERR, "BiCGStab(): <r_hat, z> = {:.2} < rhotol = {:.2}", rhat_z, rhotol);
+    //         break;
+    //     }
+
+    //     alpha = rho / rhat_z;
+
+    //     vector_sum(q, 1.0, r, -alpha, z, nn);
+
+    //     double qnorm = parallel_norm(q, nn);
+    //     if (qnorm < tolerance) {
+    //         vector_add(x, alpha, d, nn);
+    //         return i;
+    //     }
+
+    //     // pre-conditioning
+    //     for(int jj = 0; jj < nn; ++jj) {
+    //         int j = ilist[jj];
+    //         if (atom->mask[j] & groupbit) {
+    //             q_hat[j] = q[j] * Hdia_inv[j];
+    //             q_hat[NN + j] = q[NN + j] * Xdia_inv[j];
     //         }
     //     }
+    //     // last two rows
+    //     if (last_rows_flag) {
+    //         q_hat[2*NN] = q[2*NN];
+    //         q_hat[2*NN + 1] = q[2*NN + 1];
+    //     }
+    //     pack_flag = 3;
+    //     comm->forward_comm(this);
+    //     more_forward_comm(q_hat);
+
+    //     sparse_matvec_acks2(&H, &X, q_hat, y);
+    //     pack_flag = 3;
+    //     comm->reverse_comm(this);
+    //     more_reverse_comm(y);
+
+    //     double y_q = parallel_dot(y, q, nn);
+    //     double y_y = parallel_dot(y, y, nn);
+    //     omega = y_q / y_y;
+    //     if (fabs(omega) < rhotol) {
+    //         error->warning(FLERR, "BiCGStab(): |omega| = {:.2} < rhotol = {:.2}", fabs(omega), rhotol);
+    //         break;
+    //     }
+
+    //     vector_add(x, alpha, d, nn);
+    //     vector_add(x, omega, q_hat, nn);
+
+    //     vector_sum(r, 1.0, q, -omega, y, nn);
+
+    //     rnorm = parallel_norm(r, nn);
+    //     if (rnorm < bnorm * tolerance) {
+    //         return i;
+    //     }
+
+    //     rho_old = rho;
     // }
 
-    vector_sum(r, 1.0, b, -1.0, d, nn);
-
-    double rnorm = parallel_norm(r, nn);
-    if (rnorm < bnorm * tolerance) {
-        return 0;
-    }
-
-    vector_copy(r_hat, r, nn); // Shadow residual
-
-    for (i = 1; i < maxiters; ++i) {
-        rho = parallel_dot(r_hat, r, nn);
-        if (fabs(rho) < rhotol) {
-            error->warning(FLERR, "BiCGStab(): |rho| = {:.2} < rhotol = {:.2}", fabs(rho), rhotol);
-            break;
-        }
-
-        if (i == 1) {
-            vector_copy(p, r, nn);
-        } else {
-            beta = (rho / rho_old) * (alpha / omega);
-            vector_sum(g, 1.0, p, -omega, z, nn);
-            vector_sum(p, 1.0, r, beta, g, nn);
-        }
-
-        // pre-conditioning
-        for (int jj = 0; jj < nn; ++jj) {
-            int j = ilist[jj];
-            if (atom->mask[j] & groupbit) {
-                d[j] = p[j] * Hdia_inv[j];
-                d[NN + j] = p[NN + j] * Xdia_inv[j];
-            }
-        }
-        // last two rows
-        if (last_rows_flag) {
-            d[2*NN] = p[2*NN];
-            d[2*NN + 1] = p[2*NN + 1];
-        }
-        pack_flag = 1; // TODO Uncomment
-        comm->forward_comm(this);
-        more_forward_comm(d);
-
-        // { // TODO: Remove after testing
-        //   // previous forward comm has updated ghost atoms at this point
-        //     std::vector<double> test_vec(atom->natoms, 0.0);
-        //     for (int _ii = 0; _ii < (atom->nlocal + atom->nghost); ++_ii) {
-        //         int _i = ilist[_ii];
-        //         if (atom->mask[_i] & groupbit) {
-        //             int atom_ID = atom->tag[_i] - 1; // tag is 1-indexed
-        //             // printf("atom_ID: %d\n", atom_ID);
-        //             test_vec.at(atom_ID) = d[_i];
-        //         }
-        //     }
-
-        //     pack_flag = 1;
-        //     comm->forward_comm(this);
-        //     more_forward_comm(d);
-
-        //     for (int _ii = 1500; _ii < (atom->nlocal + atom->nghost); ++_ii) {
-        //         int _i = ilist[_ii];
-        //         if (atom->mask[_i] & groupbit) {
-        //             int atom_ID = atom->tag[_i] - 1; // tag is 1-indexed
-        //             if (test_vec[atom_ID] != d[_i]) error->all(FLERR, Error::NOLASTLINE, "test_vec[{}] != d[{}]", atom_ID, _i);
-        //         }
-        //     }
-        // }
-
-        sparse_matvec_acks2(&H, &X, d, z);
-        pack_flag = 2;
-        comm->reverse_comm(this);
-        more_reverse_comm(z);
-
-        double rhat_z = parallel_dot(r_hat, z, nn);
-        if (fabs(rhat_z) < rhotol) {
-            error->warning(FLERR, "BiCGStab(): <r_hat, z> = {:.2} < rhotol = {:.2}", rhat_z, rhotol);
-            break;
-        }
-
-        alpha = rho / rhat_z;
-
-        vector_sum(q, 1.0, r, -alpha, z, nn);
-
-        double qnorm = parallel_norm(q, nn);
-        if (qnorm < tolerance) {
-            vector_add(x, alpha, d, nn);
-            return i;
-        }
-
-        // pre-conditioning
-        for(int jj = 0; jj < nn; ++jj) {
-            int j = ilist[jj];
-            if (atom->mask[j] & groupbit) {
-                q_hat[j] = q[j] * Hdia_inv[j];
-                q_hat[NN + j] = q[NN + j] * Xdia_inv[j];
-            }
-        }
-        // last two rows
-        if (last_rows_flag) {
-            q_hat[2*NN] = q[2*NN];
-            q_hat[2*NN + 1] = q[2*NN + 1];
-        }
-        pack_flag = 3;
-        comm->forward_comm(this);
-        more_forward_comm(q_hat);
-
-        sparse_matvec_acks2(&H, &X, q_hat, y);
-        pack_flag = 3;
-        comm->reverse_comm(this);
-        more_reverse_comm(y);
-
-        double y_q = parallel_dot(y, q, nn);
-        double y_y = parallel_dot(y, y, nn);
-        omega = y_q / y_y;
-        if (fabs(omega) < rhotol) {
-            error->warning(FLERR, "BiCGStab(): |omega| = {:.2} < rhotol = {:.2}", fabs(omega), rhotol);
-            break;
-        }
-
-        vector_add(x, alpha, d, nn);
-        vector_add(x, omega, q_hat, nn);
-
-        vector_sum(r, 1.0, q, -omega, y, nn);
-
-        rnorm = parallel_norm(r, nn);
-        if (rnorm < bnorm * tolerance) {
-            return i;
-        }
-
-        rho_old = rho;
-    }
-
-    // error->warning(FLERR, "BiCGStab() failed to converge in {} iterations, timestep: {}", i, update->ntimestep);
-    return -1;
+    // // error->warning(FLERR, "BiCGStab() failed to converge in {} iterations, timestep: {}", i, update->ntimestep);
+    // return -1;
 }
 
 /* ---------------------------------------------------------------------- */

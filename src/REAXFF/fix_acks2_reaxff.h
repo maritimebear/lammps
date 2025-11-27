@@ -106,6 +106,7 @@ class FixACKS2ReaxFF : public FixQEqReaxFF {
   std::vector<double> construct_acks2_rhs(double*) const;
   std::vector<double> array_to_vector(double*) const;
   void vector_to_array(std::vector<double>&, double*, const std::unordered_map<int, int>&);
+  void compare_array_vector(double*, const std::vector<double>&, double) const;
   std::unordered_map<int, int> construct_tag_map() const;
   crs_matrix assemble_acks2_matrix(const std::unordered_map<int, int>&) const;
   // crs_matrix __assemble_acks2_matrix(const std::unordered_map<int, int>&) const;
