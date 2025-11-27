@@ -33,6 +33,12 @@ FixStyle(qeq/reax,FixQEqReaxFF);
 #define LMP_FIX_QEQ_REAXFF_H
 
 #include "fix.h"
+#include <vector>
+#include <unordered_map>
+#include <algorithm>
+#include <numeric>
+#include "crs_matrix.h"
+#include "vector_utils.h"
 
 namespace LAMMPS_NS {
 
@@ -139,6 +145,14 @@ class FixQEqReaxFF : public Fix {
   virtual void vector_add(double *, double, double *, int);
 
   virtual void get_chi_field();
+
+  // TODO Cleanup
+  int _CG(double* b, double* x);
+  int CRS_CG(const crs_matrix&, std::vector<double>&, const std::vector<double>&, double, double, int) const;
+  std::unordered_map<int, int> construct_tag_map() const;
+  std::vector<double> array_to_vector(double*) const;
+  void vector_to_array(std::vector<double>&, double*, const std::unordered_map<int, int>&);
+  crs_matrix assemble_qeq_matrix(const std::unordered_map<int, int>&) const;
 
   // dual CG support
   int dual_enabled;            // 0: Original, separate s & t optimization; 1: dual optimization

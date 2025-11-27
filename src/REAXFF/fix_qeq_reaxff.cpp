@@ -69,6 +69,17 @@ static const char cite_fix_qeq_reaxff[] =
 FixQEqReaxFF::FixQEqReaxFF(LAMMPS *lmp, int narg, char **arg) :
   Fix(lmp, narg, arg), matvecs(0), pertype_option(nullptr)
 {
+
+  // TODO Cleanup
+  // Restrict QEq to serial execution to test CRS structures and solver
+  int _rank = 0;
+  int  _size = 0;
+  MPI_Comm_rank(MPI_COMM_WORLD, &_rank);
+  MPI_Comm_size(MPI_COMM_WORLD, &_size);
+  if (_size != 1 || _rank != 0) {
+    error->all(FLERR, Error::NOLASTLINE, "QEq restricted to serial execution on this branch");
+  }
+
   scalar_flag = 1;
   extscalar = 0;
   imax = 200;
@@ -611,11 +622,113 @@ void FixQEqReaxFF::pre_force(int /*vflag*/)
 
   init_matvec();
 
-  matvecs_s = CG(b_s, s);       // CG on s - parallel
-  matvecs_t = CG(b_t, t);       // CG on t - parallel
+  // TODO Restore
+  // matvecs_s = CG(b_s, s);       // CG on s - parallel
+  // matvecs_t = CG(b_t, t);       // CG on t - parallel
+
+  // TODO Cleanup
+  matvecs_s = _CG(b_s, s);
+  matvecs_t = _CG(b_t, t);
+
   matvecs = matvecs_s + matvecs_t;
 
   calculate_Q();
+}
+
+/* ---------------------------------------------------------------------- */
+
+// TODO Cleanup
+int FixQEqReaxFF::_CG(double* b, double* x) {
+    // CG using CRS matrix and std::vectors
+
+    // Solver parameters
+    double rhotol = 1e-15;
+    int maxiters = 1000;
+
+    // Initialise data structures
+    std::vector<double> vx(atom->natoms, 0.0);
+    std::vector<double> vb = array_to_vector(b);
+
+    // Map of atom tag (1-indexed) : ilist index
+    const std::unordered_map<int, int> tag_map = construct_tag_map();
+
+    // Assemble matrix
+    crs_matrix qeq_matrix = assemble_qeq_matrix(tag_map);
+
+    // Solve system
+    int iters = CRS_CG(qeq_matrix, vx, vb, tolerance, rhotol, maxiters);
+
+    // Copy solution vector to reaxff array
+    vector_to_array(vx, x, tag_map);
+
+    return iters;
+}
+
+/* ---------------------------------------------------------------------- */
+
+int FixQEqReaxFF::CRS_CG(const crs_matrix& A, std::vector<double>& x, const std::vector<double>& b, double tolerance, double rhotol, int maxiters) const {
+    // CG using CRS matrix and std::vectors
+    // Returns iteration count
+    // Templates for the Solution of Linear Systems: Building Blocks for Iterative Methods, Figure 2.5
+
+    double bnorm = norm(b);
+    if (bnorm == 0.0) {
+        error->warning(FLERR, "CG(): ||b|| == 0.0, b == zero vector?");
+        return 0;
+    }
+
+    std::vector<double> r = b - crs_mvm(A, x);
+    // Convergence check
+    double rnorm0 = norm(r);
+    if (rnorm0 < bnorm * tolerance) {
+        return 0;
+    }
+
+    // Variables declared here since referenced in loop before assignment
+    double rho_old;
+    std::vector<double> p;
+
+    for (int iter = 1; iter < maxiters; ++iter) {
+        // TODO Preconditioning: z = M^1 * r
+        std::vector<double> z = r;
+
+        double rho = inner_product(r, z);
+        if (fabs(rho) < rhotol) {
+            error->warning(FLERR, "BiCGStab(): |rho| = {:.2} < rhotol = {:.2}", fabs(rho), rhotol);
+            break;
+        }
+
+        if (iter == 1) {
+            p = z;
+        } else {
+            double beta = rho / rho_old;
+            p = z + (beta * p);
+        }
+
+        std::vector<double> q = crs_mvm(A, p);
+
+        double pq = inner_product(p, q);
+        if (fabs(pq) < rhotol) {
+            error->warning(FLERR, "CG(): |<p, q>|= {:.2} < rhotol = {:.2}", fabs(pq), rhotol);
+            break;
+        }
+
+        double alpha = rho / pq;
+
+        x = x + (alpha * p);
+
+        r = r - (alpha * q);
+
+        double rnorm = norm(r);
+        if (rnorm < rnorm0 * tolerance) {
+            return iter;
+        }
+
+        rho_old = rho;
+    }
+
+
+    return -1; // Only in case of numerical breakdown inside iteration loop
 }
 
 /* ---------------------------------------------------------------------- */
@@ -1218,4 +1331,161 @@ void FixQEqReaxFF::get_chi_field()
       }
     }
   }
+}
+
+/* ---------------------------------------------------------------------- */
+
+std::unordered_map<int, int> FixQEqReaxFF::construct_tag_map() const {
+    // Return map of owned atom tag (1-indexed) : ilist index
+
+    std::unordered_map<int, int> tag_map;
+
+    for (int ii = 0; ii < atom->nlocal; ++ii) {
+        int i = ilist[ii];
+        if (atom->mask[i] & groupbit) {
+            tag_map[atom->tag[i]] = i;
+        }
+    }
+
+    if (tag_map.size() != atom->nlocal) { // Sanity check
+        error->all(FLERR, Error::NOLASTLINE, "tag_map.size(): {}, atom->nlocal: {}", tag_map.size(), atom->nlocal);
+    }
+
+    return tag_map;
+}
+
+/* ---------------------------------------------------------------------- */
+
+std::vector<double> FixQEqReaxFF::array_to_vector(double* reaxff_array) const {
+    // Construct std::vector from ReaxFF array, copying values to correct locations by atom tag
+    std::vector<double> vec(atom->nlocal, 0.0);
+
+    for (int ii = 0; ii < atom->nlocal; ++ii) {
+        int i = ilist[ii];
+        if (atom->mask[i] & groupbit) {
+            int vec_idx = atom->tag[i] - 1;
+            // TODO Remove bounds checks
+            vec.at(vec_idx) = reaxff_array[i];
+        }
+    }
+
+    return vec;
+}
+
+/* ---------------------------------------------------------------------- */
+
+void FixQEqReaxFF::vector_to_array(std::vector<double>& vec, double* reaxff_array, const std::unordered_map<int, int>& tag_map) {
+    // Copy from atom tag ordered std::vector to reaxff array
+
+    for (int vec_idx = 0; vec_idx < atom->nlocal; ++vec_idx) {
+        int i = tag_map.at(vec_idx + 1); // ReaxFF indexing convention, i: local atom index; crs_row + 1 since atom->tag[] is 1-indexed
+        if (atom->mask[i] & groupbit) {
+            // TODO Remove bounds checks
+            reaxff_array[i] = vec.at(vec_idx);
+        }
+    }
+
+    return;
+}
+
+/* ---------------------------------------------------------------------- */
+
+crs_matrix FixQEqReaxFF::assemble_qeq_matrix(const std::unordered_map<int, int>& tag_map) const {
+
+    crs_matrix matrix;
+    int idx_nz = 0; // Index of non-zero entries in crs_matrix
+
+    // // From FixQEqReaxFF::compute_H()
+    // double **x = atom->x;
+    // constexpr double EPSILON_H = 0.0001;
+
+
+    // Total (square) matrix shape: natoms
+    // Rows 0 to natoms - 1: QEq/H block
+    for (int crs_row = 0; crs_row < atom->nlocal; ++crs_row) { // atom->nlocal == natoms
+
+        int i = tag_map.at(crs_row + 1); // ReaxFF indexing convention, i: local atom index; crs_row + 1 since atom->tag[] is 1-indexed
+        
+        if (atom->mask[i] & groupbit) {
+
+            matrix.row_ptr.push_back(idx_nz); // Entering new row; append current position to row_ptr;
+
+            // QEq/H block: columns 0 to natoms - 1, copy from ReaxFF data structures
+
+            if (H.numnbrs[i] > atom->nlocal) { // Sanity check
+                error->all(FLERR, Error::NOLASTLINE, "numnbrs: {}, atom->nlocal: {}", H.numnbrs[i], atom->nlocal);
+            }
+
+            // TODO: Sort columns in increasing order of tags?
+
+            std::vector<int> idxs_crs_cols;
+            std::vector<double> vals_H;
+            idxs_crs_cols.reserve(H.numnbrs[i] + 1);
+            vals_H.reserve(H.numnbrs[i] + 1);
+
+            bool found_diagonal = false;
+
+            for (int itr_j = H.firstnbr[i]; itr_j < H.firstnbr[i] + H.numnbrs[i]; ++itr_j) {
+                int j = H.jlist[itr_j]; // j: local index of neighbour atom
+                idxs_crs_cols.push_back(atom->tag[j] - 1); // -1 to convert to 0-indexing
+                vals_H.push_back(H.val[itr_j]);
+            }
+
+            // Diagonal
+            idxs_crs_cols.push_back(crs_row);
+            vals_H.push_back(eta[atom->type[i]]);
+
+            // Insert row into crs_matrix
+            matrix.col_ind.insert(matrix.col_ind.end(), idxs_crs_cols.begin(), idxs_crs_cols.end());
+            matrix.val.insert(matrix.val.end(), vals_H.begin(), vals_H.end());
+            idx_nz += vals_H.size();
+
+
+            // QEq/H block: columns 0 to natoms - 1
+            // for (int crs_col = crs_row; crs_col < atom->nlocal; ++ crs_col) { // Only storing upper right triangle since matrix is symmetric: columns start from diagonal
+            //     if (crs_col == crs_row) { // Diagonal entry
+            //         matrix.col_ind.push_back(crs_col);
+            //         matrix.val.push_back(eta[atom->type[i]]);
+            //         ++idx_nz;
+            //     } else {
+            //         int j = tag_map.at(crs_col + 1); // ReaxFF local index of neighbour atom
+
+            //         // From FixQEqReaxFF::compute_H()
+            //         double dx = x[j][0] - x[i][0];
+            //         double dy = x[j][1] - x[i][1];
+            //         double dz = x[j][2] - x[i][2];
+            //         double r_sqr = SQR(dx) + SQR(dy) + SQR(dz);
+
+            //         bool flag = 0;
+            //         if (r_sqr <= SQR(swb)) {
+            //             if (j < atom->nlocal) flag = 1;
+            //             else if (atom->tag[i] < atom->tag[j]) flag = 1;
+            //             else if (atom->tag[i] == atom->tag[j]) {
+            //                 if (dz > EPSILON_H) flag = 1;
+            //                 else if (fabs(dz) < EPSILON_H) {
+            //                     if (dy > EPSILON_H) flag = 1;
+            //                     else if (fabs(dy) < EPSILON_H && dx > EPSILON_H) flag = 1;
+            //                 }
+            //             }
+            //         }
+
+            //         if (flag) {
+            //             matrix.col_ind.push_back(crs_col);
+            //             matrix.val.push_back(calculate_H(sqrt(r_sqr), shld[atom->type[i]][atom->type[j]]));
+            //             ++idx_nz;
+            //         }
+
+            //     }
+
+            // }
+
+
+        } // (atom->mask[i] & groupbit)
+
+    }
+
+    matrix.row_ptr.push_back(idx_nz);
+    // printf("Assemble CRS idx_nz: %d\n", idx_nz);
+
+    return matrix;
 }
