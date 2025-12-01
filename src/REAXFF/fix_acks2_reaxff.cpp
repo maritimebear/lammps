@@ -1394,11 +1394,17 @@ int FixACKS2ReaxFF::_ACKS2BiCGStab(double* b, double* x, double rhotol, int maxi
     crs_matrix acks2_matrix = assemble_acks2_matrix(tag_map);
 
     if (print_acks2_matrix) {
+      print_vector(append_timestep("crs_solution_pre."), vx);
+      print_vector(append_timestep("crs_rhs."), vb);
       acks2_matrix.print_to_file(append_timestep("acks2matrix."), true); // second argument: print symmetric entries
     }
 
     int _iters = CRS_BiCGStab(acks2_matrix, vx, vb, tolerance, rhotol, maxiters);
     // int _iters = CRS_CG(acks2_matrix, vx, vb, tolerance, rhotol, maxiters);
+
+    if (print_acks2_matrix) {
+      print_vector(append_timestep("crs_solution_post."), vx);
+    }
 
     // { // TODO Cleanup: Solve Ax = b using CRS and ReaxFF, compare solutions
     //     int _iters_reaxff = ACKS2BiCGStab(b, x, rhotol, maxiters);

@@ -6,6 +6,8 @@
 #include <functional>
 #include <cmath>
 #include <numeric>
+#include <iostream>
+#include <fstream>
 // #include "crs_matrix.h"
 
 template <typename T>
@@ -90,6 +92,21 @@ double norm(const std::vector<T>& v1) {
     return std::sqrt(inner_product(v1, v1));
 }
 
+template <typename T>
+void print_vector(const std::string& filename, const std::vector<T>& vector) {
+    // Print vector to text file
+
+    std::ofstream file(filename);
+    if (file.is_open()) {
+        // Print header
+        file << "idx\tval\n";
+        for (size_t i = 0; i < vector.size(); ++i) {
+            file << i << "\t" << vector[i] << "\n";
+        }
+        file.close();
+    }
+    return;
+}
 
 // double operator*(const std::vector<double>& v1, const std::vector<double>& v2) {
 //     // '*' operator overload for vector-vector inner product
