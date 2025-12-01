@@ -103,8 +103,8 @@ FixACKS2ReaxFF::FixACKS2ReaxFF(LAMMPS *lmp, int narg, char **arg) :
     error->all(FLERR, Error::NOLASTLINE, "Dual keyword only supported with fix qeq/reax/omp");
 
   // TODO remove test/debug variables
-  print_system = false;
-  print_acks2_matrix = false;
+  print_system = true;
+  print_acks2_matrix = true;
   vec_b_s = {};
   vec_s = {};
   vec_H_diag = {};
