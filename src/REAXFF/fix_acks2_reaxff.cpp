@@ -103,8 +103,8 @@ FixACKS2ReaxFF::FixACKS2ReaxFF(LAMMPS *lmp, int narg, char **arg) :
     error->all(FLERR, Error::NOLASTLINE, "Dual keyword only supported with fix qeq/reax/omp");
 
   // TODO remove test/debug variables
-  print_system = true;
-  print_acks2_matrix = true;
+  print_system = false;
+  print_acks2_matrix = false;
   vec_b_s = {};
   vec_s = {};
   vec_H_diag = {};
@@ -1636,7 +1636,7 @@ int FixACKS2ReaxFF::CRS_BiCGStab(const crs_matrix& A, std::vector<double>& x, co
         double rho = inner_product(rhat, r);
         // printf("iter: %d rho: %f\n", iter, rho);
         if (fabs(rho) < rhotol) {
-            error->warning(FLERR, "BiCGStab(): |rho| = {:.2} < rhotol = {:.2}", fabs(rho), rhotol);
+            error->warning(FLERR, "CRS_BiCGStab(): |rho| = {:.2} < rhotol = {:.2}", fabs(rho), rhotol);
             break;
         }
 
@@ -1655,7 +1655,7 @@ int FixACKS2ReaxFF::CRS_BiCGStab(const crs_matrix& A, std::vector<double>& x, co
         double rhat_v = inner_product(rhat, v);
         // printf("iter: %d rhat_v: %f\n", iter, rhat_v);
         if (fabs(rhat_v) < rhotol) {
-            error->warning(FLERR, "BiCGStab(): |<rhat, v>|= {:.2} < rhotol = {:.2}", fabs(rhat_v), rhotol);
+            error->warning(FLERR, "CRS_BiCGStab(): |<rhat, v>|= {:.2} < rhotol = {:.2}", fabs(rhat_v), rhotol);
             break;
         }
 
@@ -1676,7 +1676,7 @@ int FixACKS2ReaxFF::CRS_BiCGStab(const crs_matrix& A, std::vector<double>& x, co
 
         omega = inner_product(t, s) / inner_product(t, t);
         if (fabs(omega) < rhotol) {
-            error->warning(FLERR, "BiCGStab(): |omega| = {:.2} < rhotol = {:.2}", fabs(omega), rhotol);
+            error->warning(FLERR, "CRS_BiCGStab(): |omega| = {:.2} < rhotol = {:.2}", fabs(omega), rhotol);
             break;
         }
 
@@ -1704,7 +1704,7 @@ int FixACKS2ReaxFF::CRS_CG(const crs_matrix& A, std::vector<double>& x, const st
 
     double bnorm = norm(b);
     if (bnorm == 0.0) {
-        error->warning(FLERR, "CG(): ||b|| == 0.0, b == zero vector?");
+        error->warning(FLERR, "CRS_CG(): ||b|| == 0.0, b == zero vector?");
         return 0;
     }
 
@@ -1725,7 +1725,7 @@ int FixACKS2ReaxFF::CRS_CG(const crs_matrix& A, std::vector<double>& x, const st
 
         double rho = inner_product(r, z);
         if (fabs(rho) < rhotol) {
-            error->warning(FLERR, "BiCGStab(): |rho| = {:.2} < rhotol = {:.2}", fabs(rho), rhotol);
+            error->warning(FLERR, "CRS_CG(): |rho| = {:.2} < rhotol = {:.2}", fabs(rho), rhotol);
             break;
         }
 
@@ -1740,7 +1740,7 @@ int FixACKS2ReaxFF::CRS_CG(const crs_matrix& A, std::vector<double>& x, const st
 
         double pq = inner_product(p, q);
         if (fabs(pq) < rhotol) {
-            error->warning(FLERR, "CG(): |<p, q>|= {:.2} < rhotol = {:.2}", fabs(pq), rhotol);
+            error->warning(FLERR, "CRS_CG(): |<p, q>|= {:.2} < rhotol = {:.2}", fabs(pq), rhotol);
             break;
         }
 

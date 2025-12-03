@@ -673,7 +673,7 @@ int FixQEqReaxFF::CRS_CG(const crs_matrix& A, std::vector<double>& x, const std:
 
     double bnorm = norm(b);
     if (bnorm == 0.0) {
-        error->warning(FLERR, "CG(): ||b|| == 0.0, b == zero vector?");
+        error->warning(FLERR, "CRS_CG(): ||b|| == 0.0, b == zero vector?");
         return 0;
     }
 
@@ -694,7 +694,7 @@ int FixQEqReaxFF::CRS_CG(const crs_matrix& A, std::vector<double>& x, const std:
 
         double rho = inner_product(r, z);
         if (fabs(rho) < rhotol) {
-            error->warning(FLERR, "BiCGStab(): |rho| = {:.2} < rhotol = {:.2}", fabs(rho), rhotol);
+            error->warning(FLERR, "CRS_CG(): |rho| = {:.2} < rhotol = {:.2}", fabs(rho), rhotol);
             break;
         }
 
@@ -709,7 +709,7 @@ int FixQEqReaxFF::CRS_CG(const crs_matrix& A, std::vector<double>& x, const std:
 
         double pq = inner_product(p, q);
         if (fabs(pq) < rhotol) {
-            error->warning(FLERR, "CG(): |<p, q>|= {:.2} < rhotol = {:.2}", fabs(pq), rhotol);
+            error->warning(FLERR, "CRS_CG(): |<p, q>|= {:.2} < rhotol = {:.2}", fabs(pq), rhotol);
             break;
         }
 
