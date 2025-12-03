@@ -54,7 +54,9 @@ std::vector<double> crs_mvm(const crs_matrix& A, const std::vector<T>& x) {
       for (size_t idx_nz = A.row_ptr[row]; idx_nz < A.row_ptr[row+1]; ++idx_nz) {
           size_t col = A.col_ind[idx_nz];
           Ax[row] += (A.val[idx_nz] * x[col]);
-          Ax[col] += (A.val[idx_nz] * x[row]); // Symmetric entry
+          if (row != col) { // Avoid multiplying diagonal twice
+              Ax[col] += (A.val[idx_nz] * x[row]); // Symmetric entry
+          }
       }
   }
   return Ax;
