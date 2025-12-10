@@ -105,4 +105,23 @@ std::vector<double> crs_mvm(const crs_matrix& A, const std::vector<T>& x) {
   return Ax;
 }
 
+template <typename T>
+std::vector<double> jacobi_precond_solve(const crs_matrix& A, const std::vector<T>& x) {
+    // Returns y = inv(M) * x, where M = diag(A)
+
+    std::vector<double> y(A.nrows(), 0.0);
+    assert(A.found_diagonal_indices);
+    for (size_t row = 0; row < A.nrows(); ++row) {
+        size_t idx_nz = A.diagonal_ind[row];
+        size_t col = A.col_ind[idx_nz];
+        double diag = A.val[idx_nz];
+        if (diag == 0.0) {// TODO float equality test
+            diag = 1.0;
+        }
+        y[row] = (1.0 / diag) * x[col];
+    }
+
+    return y;
+}
+
 #endif

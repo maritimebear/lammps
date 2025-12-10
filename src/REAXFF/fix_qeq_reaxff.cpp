@@ -690,7 +690,10 @@ int FixQEqReaxFF::CRS_CG(const crs_matrix& A, std::vector<double>& x, const std:
 
     for (int iter = 1; iter < maxiters; ++iter) {
         // TODO Preconditioning: z = M^1 * r
-        std::vector<double> z = r;
+        // std::vector<double> z = r;
+
+        // Jacobi preconditioner: M = diag(A), z = inv(M)* r
+        std::vector<double> z = jacobi_precond_solve(A, r);
 
         double rho = inner_product(r, z);
         if (fabs(rho) < rhotol) {
