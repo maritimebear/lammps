@@ -1151,6 +1151,8 @@ crs_matrix FixACKS2ReaxFF::assemble_acks2_matrix(const std::unordered_map<int, i
     matrix.row_ptr.push_back(idx_nz);
     // printf("Assemble CRS idx_nz: %d\n", idx_nz);
 
+    matrix.find_diagonal_indices();
+
     return matrix;
 }
 

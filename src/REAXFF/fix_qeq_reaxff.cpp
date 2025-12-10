@@ -1487,5 +1487,7 @@ crs_matrix FixQEqReaxFF::assemble_qeq_matrix(const std::unordered_map<int, int>&
     matrix.row_ptr.push_back(idx_nz);
     // printf("Assemble CRS idx_nz: %d\n", idx_nz);
 
+    matrix.find_diagonal_indices();
+
     return matrix;
 }
