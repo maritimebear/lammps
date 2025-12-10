@@ -1401,8 +1401,8 @@ int FixACKS2ReaxFF::_ACKS2BiCGStab(double* b, double* x, double rhotol, int maxi
       acks2_matrix.print_to_file(append_timestep("acks2matrix."), true); // second argument: print symmetric entries
     }
 
-    int _iters = CRS_BiCGStab(acks2_matrix, vx, vb, tolerance, rhotol, maxiters);
-    // int _iters = CRS_CG(acks2_matrix, vx, vb, tolerance, rhotol, maxiters);
+    // int _iters = CRS_BiCGStab(acks2_matrix, vx, vb, tolerance, rhotol, maxiters);
+    int _iters = CRS_CG(acks2_matrix, vx, vb, tolerance, rhotol, maxiters);
 
     if (print_acks2_matrix) {
       print_vector(append_timestep("crs_solution_post."), vx);
