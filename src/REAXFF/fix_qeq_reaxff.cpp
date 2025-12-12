@@ -673,7 +673,8 @@ int FixQEqReaxFF::solve_eigen(double* b, double* x) {
 
 // TODO Cleanup
 Eigen::SparseMatrix<double> FixQEqReaxFF::assemble_eigen_matrix(const std::unordered_map<int, int>& tag_map) const {
-    // Returns upper-triangular symmetric sparse matrix
+    // Returns symmetric sparse matrix
+    // TODO Failure to converge unless the whole matrix is stored, just the upper or lower triangle is insufficient for whatever reason
 
     int system_size = atom->natoms;
 
