@@ -37,6 +37,9 @@ FixStyle(qeq/reax,FixQEqReaxFF);
 #include <unordered_map>
 #include <algorithm>
 #include <numeric>
+#include <Eigen/Sparse>
+#include <Eigen/IterativeLinearSolvers>
+#include <unsupported/Eigen/IterativeSolvers>
 #include "crs_matrix.h"
 #include "vector_utils.h"
 
@@ -153,6 +156,11 @@ class FixQEqReaxFF : public Fix {
   std::vector<double> array_to_vector(double*) const;
   void vector_to_array(std::vector<double>&, double*, const std::unordered_map<int, int>&);
   crs_matrix assemble_qeq_matrix(const std::unordered_map<int, int>&) const;
+
+  int solve_eigen(double*, double*);
+  Eigen::SparseMatrix<double> assemble_eigen_matrix(const std::unordered_map<int, int>&) const;
+  Eigen::VectorXd array_to_EigenVector(double*) const;
+  void EigenVector_to_array(Eigen::VectorXd&, double*, const std::unordered_map<int, int>&);
 
   // dual CG support
   int dual_enabled;            // 0: Original, separate s & t optimization; 1: dual optimization

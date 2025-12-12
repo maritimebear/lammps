@@ -627,12 +627,92 @@ void FixQEqReaxFF::pre_force(int /*vflag*/)
   // matvecs_t = CG(b_t, t);       // CG on t - parallel
 
   // TODO Cleanup
-  matvecs_s = _CG(b_s, s);
-  matvecs_t = _CG(b_t, t);
+  // matvecs_s = _CG(b_s, s);
+  // matvecs_t = _CG(b_t, t);
+  matvecs_s = solve_eigen(b_s, s);
+  matvecs_t = solve_eigen(b_t, t);
 
   matvecs = matvecs_s + matvecs_t;
 
   calculate_Q();
+}
+
+/* ---------------------------------------------------------------------- */
+
+// TODO Cleanup
+int FixQEqReaxFF::solve_eigen(double* b, double* x) {
+    // Solve QEq system for x against b using Eigen data structures and solvers
+
+    Eigen::VectorXd vb = array_to_EigenVector(b);
+
+    // Map of atom tag (1-indexed) : ilist index
+    const std::unordered_map<int, int> tag_map = construct_tag_map();
+
+    Eigen::SparseMatrix<double> A = assemble_eigen_matrix(tag_map);
+
+    // Solve system
+    // TODO Failure to converge unless the whole matrix is stored, just the upper or lower triangle is insufficient for whatever reason
+    Eigen::ConjugateGradient<Eigen::SparseMatrix<double>, Eigen::Lower|Eigen::Upper> solver;
+    solver.setTolerance(tolerance);
+    solver.compute(A);
+    if (solver.info() != Eigen::Success) {
+        error->all(FLERR, Error::NOLASTLINE, "solve_eigen(): Matrix decomposition failed");
+    }
+
+    Eigen::VectorXd vx = solver.solve(vb);
+    if (solver.info() != Eigen::Success) {
+        error->all(FLERR, Error::NOLASTLINE, "solve_eigen(): Failed to solve linear system: iterations: {}, estimated error: {}", solver.iterations(), solver.error());
+    }
+
+    EigenVector_to_array(vx, x, tag_map);
+
+    return solver.iterations();
+}
+
+/* ---------------------------------------------------------------------- */
+
+// TODO Cleanup
+Eigen::SparseMatrix<double> FixQEqReaxFF::assemble_eigen_matrix(const std::unordered_map<int, int>& tag_map) const {
+    // Returns upper-triangular symmetric sparse matrix
+
+    int system_size = atom->natoms;
+
+    std::vector<Eigen::Triplet<double>> matrix_entries;
+    matrix_entries.reserve(system_size);
+    Eigen::SparseMatrix<double> matrix(system_size, system_size);
+
+    // Total (square) matrix shape: natoms
+    // Rows 0 to natoms - 1: QEq/H block
+    for (int idx_row = 0; idx_row < atom->nlocal; ++idx_row) { // atom->nlocal == natoms
+
+        int i = tag_map.at(idx_row + 1); // ReaxFF indexing convention, i: local atom index; idx_row + 1 since atom->tag[] is 1-indexed
+
+        if (atom->mask[i] & groupbit) {
+
+            // QEq/H block: columns 0 to natoms - 1, copy from ReaxFF data structures
+
+            if (H.numnbrs[i] > atom->nlocal) { // Sanity check
+                error->all(FLERR, Error::NOLASTLINE, "numnbrs: {}, atom->nlocal: {}", H.numnbrs[i], atom->nlocal);
+            }
+
+            // Diagonal entry
+            matrix_entries.push_back(Eigen::Triplet<double>(idx_row, idx_row, eta[atom->type[i]]));
+
+            // Off-diagonal entries
+            for (int itr_j = H.firstnbr[i]; itr_j < H.firstnbr[i] + H.numnbrs[i]; ++itr_j) {
+                int j = H.jlist[itr_j]; // j: local index of neighbour atom
+                int idx_col = atom->tag[j] - 1; // -1 to convert to 0-indexing
+                double value = H.val[itr_j];
+                matrix_entries.push_back(Eigen::Triplet<double>(idx_row, idx_col, value));
+                matrix_entries.push_back(Eigen::Triplet<double>(idx_col, idx_row, value)); // Symmetric entry
+                // TODO Failure to converge unless the whole matrix is stored, just the upper or lower triangle is insufficient for whatever reason
+            }
+
+        } // (atom->mask[i] & groupbit)
+    }
+
+    matrix.setFromTriplets(matrix_entries.begin(), matrix_entries.end());
+    return matrix;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -1385,6 +1465,40 @@ void FixQEqReaxFF::vector_to_array(std::vector<double>& vec, double* reaxff_arra
         if (atom->mask[i] & groupbit) {
             // TODO Remove bounds checks
             reaxff_array[i] = vec.at(vec_idx);
+        }
+    }
+
+    return;
+}
+
+/* ---------------------------------------------------------------------- */
+
+Eigen::VectorXd FixQEqReaxFF::array_to_EigenVector(double* reaxff_array) const {
+    // Construct Eigen::VectorXd from ReaxFF array, copying values to correct locations by atom tag
+
+    Eigen::VectorXd vec(atom->nlocal);
+    vec.setZero();
+
+    for (int ii = 0; ii < atom->nlocal; ++ii) {
+        int i = ilist[ii];
+        if (atom->mask[i] & groupbit) {
+            int vec_idx = atom->tag[i] - 1;
+            vec(vec_idx) = reaxff_array[i];
+        }
+    }
+
+    return vec;
+}
+
+/* ---------------------------------------------------------------------- */
+
+void FixQEqReaxFF::EigenVector_to_array(Eigen::VectorXd& vec, double* reaxff_array, const std::unordered_map<int, int>& tag_map) {
+    // Copy from atom tag ordered Eigen::VectorXd to reaxff array
+
+    for (int vec_idx = 0; vec_idx < atom->nlocal; ++vec_idx) {
+        int i = tag_map.at(vec_idx + 1); // ReaxFF indexing convention, i: local atom index; crs_row + 1 since atom->tag[] is 1-indexed
+        if (atom->mask[i] & groupbit) {
+            reaxff_array[i] = vec(vec_idx);
         }
     }
 
