@@ -965,6 +965,72 @@ std::unordered_map<int, int> FixACKS2ReaxFF::construct_tag_map() const {
 
 /* ---------------------------------------------------------------------- */
 
+// TODO Cleanup
+Eigen::SparseMatrix<double> FixACKS2ReaxFF:: assemble_eigen_matrix(const std::unordered_map<int, int>& tag_map) const {
+    // Returns symmetric sparse matrix
+    // TODO Failure to converge unless the whole matrix is stored, just the upper or lower triangle is insufficient for whatever reason
+
+    int system_size = 2*atom->natoms + 2;
+
+    std::vector<Eigen::Triplet<double>> matrix_entries;
+    matrix_entries.reserve(system_size);
+    Eigen::SparseMatrix<double> matrix(system_size, system_size);
+
+    // Total (square) matrix shape: 2*natoms + 2
+    // Rows 0 to natoms - 1: QEq/H block, first Identity block, column of zeros, column of ones
+    for (int idx_row = 0; idx_row < atom->nlocal; ++idx_row) { // atom->nlocal == natoms
+
+        int i = tag_map.at(idx_row + 1); // ReaxFF indexing convention, i: local atom index; idx_row + 1 since atom->tag[] is 1-indexed
+
+        if (atom->mask[i] & groupbit) {
+            // QEq/H block: columns 0 to natoms - 1, copy from ReaxFF data structures
+
+            if (H.numnbrs[i] > atom->nlocal) { // Sanity check
+                error->all(FLERR, Error::NOLASTLINE, "numnbrs: {}, atom->nlocal: {}", H.numnbrs[i], atom->nlocal);
+            }
+
+            // Diagonal entry
+            matrix_entries.push_back(Eigen::Triplet<double>(idx_row, idx_row, eta[atom->type[i]]));
+
+            // Off-diagonal entries
+            for (int itr_j = H.firstnbr[i]; itr_j < H.firstnbr[i] + H.numnbrs[i]; ++itr_j) {
+                int j = H.jlist[itr_j]; // j: local index of neighbour atom
+                int idx_col = atom->tag[j] - 1; // -1 to convert to 0-indexing
+                double value = H.val[itr_j];
+                matrix_entries.push_back(Eigen::Triplet<double>(idx_row, idx_col, value));
+                matrix_entries.push_back(Eigen::Triplet<double>(idx_col, idx_row, value)); // Symmetric entry
+            }
+
+            // First Identity block: columns natoms to 2*natoms - 1
+            matrix_entries.push_back(Eigen::Triplet<double>(idx_row, idx_row + atom->nlocal, 1.0)); // column index of identity diagonal == row index + width of H block
+            matrix_entries.push_back(Eigen::Triplet<double>(idx_row + atom->nlocal, idx_row, 1.0)); // Symmetric entry
+
+            // Column of zeros: column 2*natoms, skip
+
+            // Column of ones: (final) column 2*natoms + 1, rows 0 to natoms - 1
+            matrix_entries.push_back(Eigen::Triplet<double>(idx_row, 2*atom->nlocal + 1, 1.0)); // column index == width of preceding blocks
+            matrix_entries.push_back(Eigen::Triplet<double>(2*atom->nlocal + 1, idx_row, 1.0)); // Symmetric entry
+
+        } // (atom->mask[i] & groupbit)
+
+    } // Rows 0 to natoms - 1
+
+    // Rows natoms to 2*natoms - 1: second Identity block, ACKS2/X block, column of ones, column of zeros
+
+    // TODO Is this needed for Eigen?
+    // TODO Check if this messes with Jacobi preconditioning
+    // Last two rows: zeros in upper right triangle
+    // Two zeros in the last two rows must be stored, in order to get the correct product vector size during MVM
+    // Storing the last two zeros on the diagonal
+    matrix_entries.push_back(Eigen::Triplet<double>(2*atom->nlocal, 2*atom->nlocal, 0.0));
+    matrix_entries.push_back(Eigen::Triplet<double>(2*atom->nlocal + 1, 2*atom->nlocal + 1, 0.0));
+
+    matrix.setFromTriplets(matrix_entries.begin(), matrix_entries.end());
+    return matrix;
+}
+
+/* ---------------------------------------------------------------------- */
+
 crs_matrix FixACKS2ReaxFF::assemble_acks2_matrix(const std::unordered_map<int, int>& tag_map) const {
 
     crs_matrix matrix;
