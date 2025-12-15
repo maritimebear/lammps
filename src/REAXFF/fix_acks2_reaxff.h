@@ -111,6 +111,12 @@ class FixACKS2ReaxFF : public FixQEqReaxFF {
   crs_matrix assemble_acks2_matrix(const std::unordered_map<int, int>&) const;
   // crs_matrix __assemble_acks2_matrix(const std::unordered_map<int, int>&) const;
 
+  int solve_eigen(double*, double*);
+  Eigen::SparseMatrix<double> assemble_eigen_matrix(const std::unordered_map<int, int>&) const;
+  Eigen::VectorXd array_to_EigenVector(double*) const;
+  void EigenVector_to_array(Eigen::VectorXd&, double*, const std::unordered_map<int, int>&);
+
+
   bool array_vec_equal(double*, const std::vector<double>&);
   bool diag_vec_equal(double*, const std::vector<double>&);
 

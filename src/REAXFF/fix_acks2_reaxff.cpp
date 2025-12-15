@@ -408,7 +408,8 @@ void FixACKS2ReaxFF::pre_force(int /*vflag*/)
   // matvecs = ACKS2CG(b_s, s);
   // printf("CG iterations: %d\n", matvecs);
 
-  matvecs = RestartedBiCGStab(b_s, s, 1e-15, 1000);
+  // matvecs = RestartedBiCGStab(b_s, s, 1e-15, 1000);
+  matvecs = solve_eigen(b_s, s);
 
 
   if (print_system) {
@@ -871,6 +872,33 @@ std::vector<double> FixACKS2ReaxFF::array_to_vector(double* reaxff_array) const 
 
 /* ---------------------------------------------------------------------- */
 
+Eigen::VectorXd FixACKS2ReaxFF::array_to_EigenVector(double* reaxff_array) const {
+    // Construct Eigen::VectorXd from ReaxFF array, copying values to correct locations by atom tag
+
+    Eigen::VectorXd vec(2*atom->nlocal + 2);
+    vec.setZero();
+
+    for (int ii = 0; ii < atom->nlocal; ++ii) {
+        int i = ilist[ii];
+        if (atom->mask[i] & groupbit) {
+            int vec_idx = atom->tag[i] - 1;
+            vec(vec_idx) = reaxff_array[i];
+            vec(vec_idx + atom->nlocal) = reaxff_array[NN + i]; // ACKS2-specific part
+        }
+    }
+
+    // Last two rows
+    if (last_rows_flag) {
+        for (int i = 0; i < 2; ++i) {
+            vec(2*atom->nlocal + i) = reaxff_array[2*NN + i];
+        }
+    }
+
+    return vec;
+}
+
+/* ---------------------------------------------------------------------- */
+
 void FixACKS2ReaxFF::vector_to_array(std::vector<double>& vec, double* reaxff_array, const std::unordered_map<int, int>& tag_map) {
     // Copy from atom tag ordered std::vector to reaxff array
 
@@ -888,6 +916,30 @@ void FixACKS2ReaxFF::vector_to_array(std::vector<double>& vec, double* reaxff_ar
         for (int _row = 0; _row < 2; ++_row) {
             // TODO Remove bounds checks
             reaxff_array[2*NN + _row] = vec.at(2*atom->nlocal + _row);
+        }
+    }
+
+    return;
+}
+
+/* ---------------------------------------------------------------------- */
+
+void FixACKS2ReaxFF::EigenVector_to_array(Eigen::VectorXd& vec, double* reaxff_array, const std::unordered_map<int, int>& tag_map) {
+    // Copy from atom tag ordered Eigen::VectorXd to reaxff array
+
+    for (int vec_idx = 0; vec_idx < atom->nlocal; ++vec_idx) {
+        int i = tag_map.at(vec_idx + 1); // ReaxFF indexing convention, i: local atom index; vec_idx + 1 since atom->tag[] is 1-indexed
+        if (atom->mask[i] & groupbit) {
+            reaxff_array[i] = vec(vec_idx);
+            reaxff_array[NN + i] = vec(atom->nlocal + vec_idx); // ACKS2-specific part
+        }
+    }
+
+    // Last two rows
+    if (last_rows_flag) {
+        for (int i = 0; i < 2; ++i) {
+            // TODO Remove bounds checks
+            reaxff_array[2*NN + i] = vec(2*atom->nlocal + i);
         }
     }
 
@@ -983,15 +1035,13 @@ Eigen::SparseMatrix<double> FixACKS2ReaxFF:: assemble_eigen_matrix(const std::un
         int i = tag_map.at(idx_row + 1); // ReaxFF indexing convention, i: local atom index; idx_row + 1 since atom->tag[] is 1-indexed
 
         if (atom->mask[i] & groupbit) {
-            // QEq/H block: columns 0 to natoms - 1, copy from ReaxFF data structures
 
+            // QEq/H block: columns 0 to natoms - 1, copy from ReaxFF data structures
             if (H.numnbrs[i] > atom->nlocal) { // Sanity check
                 error->all(FLERR, Error::NOLASTLINE, "numnbrs: {}, atom->nlocal: {}", H.numnbrs[i], atom->nlocal);
             }
-
             // Diagonal entry
             matrix_entries.push_back(Eigen::Triplet<double>(idx_row, idx_row, eta[atom->type[i]]));
-
             // Off-diagonal entries
             for (int itr_j = H.firstnbr[i]; itr_j < H.firstnbr[i] + H.numnbrs[i]; ++itr_j) {
                 int j = H.jlist[itr_j]; // j: local index of neighbour atom
@@ -1016,6 +1066,37 @@ Eigen::SparseMatrix<double> FixACKS2ReaxFF:: assemble_eigen_matrix(const std::un
     } // Rows 0 to natoms - 1
 
     // Rows natoms to 2*natoms - 1: second Identity block, ACKS2/X block, column of ones, column of zeros
+    for (int idx_row = atom->nlocal; idx_row < 2*atom->nlocal; ++idx_row) {
+
+        int i = tag_map.at(idx_row - atom->nlocal + 1); // offset by -nlocal since tags are from 1 to nlocal
+
+        if (atom->mask[i] & groupbit) {
+
+            // Second Identity block: columns 0 to natoms - 1, skipped since already handled in symmetric U/R block
+
+            // ACKS2/X block: columns natoms to 2*natoms - 1, copy from ReaxFF data structures
+            if (X.numnbrs[i] > atom->nlocal) { // Sanity check
+                error->all(FLERR, Error::NOLASTLINE, "numnbrs: {}, atom->nlocal: {}", X.numnbrs[i], atom->nlocal);
+            }
+            // Diagonal entry
+            matrix_entries.push_back(Eigen::Triplet<double>(idx_row, idx_row, X_diag[i]));
+            // Off-diagonal entries
+            for (int itr_j = X.firstnbr[i]; itr_j < X.firstnbr[i] + X.numnbrs[i]; ++itr_j) {
+                int j = X.jlist[itr_j]; // j: local index of neighbour atom
+                int idx_col = (atom->tag[j] - 1) + atom->nlocal; // -1 to convert to 0-indexing; offset by nlocal to account for width of previous columns
+                double value = X.val[itr_j];
+                matrix_entries.push_back(Eigen::Triplet<double>(idx_row, idx_col, value));
+                matrix_entries.push_back(Eigen::Triplet<double>(idx_col, idx_row, value)); // Symmetric entry
+            }
+
+            // Column of ones: column 2*natoms, rows natoms to 2*natoms-1
+            matrix_entries.push_back(Eigen::Triplet<double>(idx_row, 2*atom->nlocal, 1.0));
+            matrix_entries.push_back(Eigen::Triplet<double>(2*atom->nlocal, idx_row, 1.0)); // Symmetric entry
+
+            // Column of zeros: column 2*natoms + 1, skip
+
+        } // (atom->mask[i] & groupbit)
+    } // Rows natoms to 2*natoms - 1
 
     // TODO Is this needed for Eigen?
     // TODO Check if this messes with Jacobi preconditioning
@@ -1027,6 +1108,38 @@ Eigen::SparseMatrix<double> FixACKS2ReaxFF:: assemble_eigen_matrix(const std::un
 
     matrix.setFromTriplets(matrix_entries.begin(), matrix_entries.end());
     return matrix;
+}
+
+/* ---------------------------------------------------------------------- */
+
+int FixACKS2ReaxFF::solve_eigen(double* b, double* x) {
+    // Solve ACKS2 system for x against b using Eigen data structures and solvers
+
+    Eigen::VectorXd vb = array_to_EigenVector(b);
+
+    // Map of atom tag (1-indexed) : ilist index
+    const std::unordered_map<int, int> tag_map = construct_tag_map();
+
+    Eigen::SparseMatrix<double> A = assemble_eigen_matrix(tag_map);
+
+    // Solve system
+    // TODO Failure to converge unless the whole matrix is stored, just the upper or lower triangle is insufficient for whatever reason
+    // Eigen::GMRES<Eigen::SparseMatrix<double>> solver;
+    Eigen::MINRES<Eigen::SparseMatrix<double>, Eigen::Lower | Eigen::Upper> solver;
+    solver.setTolerance(tolerance);
+    solver.compute(A);
+    if (solver.info() != Eigen::Success) {
+        error->all(FLERR, Error::NOLASTLINE, "solve_eigen(): Matrix decomposition failed");
+    }
+
+    Eigen::VectorXd vx = solver.solve(vb);
+    if (solver.info() != Eigen::Success) {
+        error->all(FLERR, Error::NOLASTLINE, "solve_eigen(): Failed to solve linear system: iterations: {}, estimated error: {}", solver.iterations(), solver.error());
+    }
+
+    EigenVector_to_array(vx, x, tag_map);
+
+    return solver.iterations();
 }
 
 /* ---------------------------------------------------------------------- */
