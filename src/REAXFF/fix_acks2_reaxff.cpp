@@ -89,6 +89,13 @@ FixACKS2ReaxFF::FixACKS2ReaxFF(LAMMPS *lmp, int narg, char **arg) :
   X.val = nullptr;
   X.ilist = nullptr; // TODO Cleanup
 
+  // MINRES
+  v_old = nullptr;
+  v = nullptr;
+  v_new = nullptr;
+  p_old = nullptr;
+  p_oold = nullptr;
+
   // Update comm sizes for this fix
   comm_forward = comm_reverse = 2;
 
@@ -262,6 +269,13 @@ void FixACKS2ReaxFF::allocate_storage()
   memory->create(y,size,"acks2:y");
   memory->create(z,size,"acks2:z");
 
+  // MINRES storage
+  memory->create(v_old,size,"acks2:g");
+  memory->create(v,size,"acks2:g");
+  memory->create(v_new,size,"acks2:g");
+  memory->create(p_old,size,"acks2:g");
+  memory->create(p_oold,size,"acks2:g");
+
   // TODO Cleanup
   vec_b_s.resize(size, 0.0);
   vec_s.resize(size, 0.0);
@@ -285,6 +299,13 @@ void FixACKS2ReaxFF::deallocate_storage()
   memory->destroy(r_hat);
   memory->destroy(y);
   memory->destroy(z);
+
+  // MINRES storage
+  memory->destroy(v_old);
+  memory->destroy(v);
+  memory->destroy(v_new);
+  memory->destroy(p_old);
+  memory->destroy(p_oold);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -408,7 +429,12 @@ void FixACKS2ReaxFF::pre_force(int /*vflag*/)
   // matvecs = ACKS2CG(b_s, s);
   // printf("CG iterations: %d\n", matvecs);
 
-  matvecs = RestartedBiCGStab(b_s, s, 1e-15, 1000);
+  // matvecs = RestartedBiCGStab(b_s, s, 1e-15, 1000);
+
+  matvecs = ACKS2BiCGStab(b_s, s, 1e-16, imax);
+  if (matvecs == -1) {
+      matvecs = MINRES(b_s, s);
+  }
 
 
   if (print_system) {
@@ -1380,6 +1406,161 @@ crs_matrix FixACKS2ReaxFF::assemble_acks2_matrix(const std::unordered_map<int, i
 
 //     return matrix;
 // }
+
+/* ---------------------------------------------------------------------- */
+
+int FixACKS2ReaxFF::MINRES(double* b, double* x) {
+    // Following Eigen MINRES implementation
+    // https://libeigen.gitlab.io/eigen/docs-nightly/unsupported/MINRES_8h_source.html
+    // <eigen>/unsupported/Eigen/src/IterativeSolvers/MINRES.h
+
+    // Check for zero rhs
+    const double rhsNorm2 = parallel_dot(b, b, nn);
+    if (rhsNorm2 == 0) {
+        vector_set(x, 0, nn); // Set x to zero vector
+        return 0; // zero iterations
+    }
+
+    const double threshold2 = tolerance * tolerance * rhsNorm2;
+
+    // // Set solution to zero
+    // vector_set(x, 0, nn);
+
+    // Initialise variables
+    vector_set(v_old, 0, nn);
+    vector_set(v, 0, nn);
+    vector_set(q, 0, nn);
+
+    // v_new
+    sparse_matvec_acks2(&H, &X, x, y);
+    pack_flag = 3;
+    comm->reverse_comm(this);
+    more_reverse_comm(y);
+    vector_sum(v_new, 1, b, -1, y, nn);
+
+    double residualNorm2 = parallel_dot(v_new, v_new, nn);
+
+    // w_new = precond_solve(v_new)
+    vector_copy(q_hat, v_new, nn); // Identity preconditioner
+
+    // Jacobi preconditioner cannot be positive definite, since X-block of ACKS2 matrix contains -ve values on the diagonal
+    // https://people.maths.ox.ac.uk/wathen/preconditioning.pdf, pg. 23, 5.2. Saddle point systems
+    // for (int jj = 0; jj < nn; ++jj) {
+    //   const int j = ilist[jj];
+    //   if (atom->mask[j] & groupbit) {
+    //     q_hat[j] = v_new[j] * Hdia_inv[j];
+    //     q_hat[NN+j] = v_new[NN+j] * Xdia_inv[j];
+    //   }
+    // }
+    // // last two rows
+    // if (last_rows_flag) {
+    //   q_hat[2*NN] = v_new[2*NN];
+    //   q_hat[2*NN + 1] = v_new[2*NN + 1];
+    // }
+    // pack_flag = 3;
+    // comm->forward_comm(this);
+    // more_forward_comm(q_hat);
+
+    double beta_new2 = parallel_dot(v_new, q_hat, nn);
+    // if (beta_new2 < 0) {
+    //     error->warning(FLERR, "MINRES(): Preconditioner is not positive definite, beta_new2: {}", beta_new2);
+    //     return 0;
+    // }
+
+    double beta_new = sqrt(beta_new2);
+
+    const double beta_one = beta_new;
+
+    double c = 1.0; // Cosine of Givens rotation
+    double c_old = 1.0;
+    double s = 0.0; // Sine of Givens rotation
+    double s_old = 0.0;
+
+    vector_set(p_oold, 0, nn);
+    vector_set(p_old, 0, nn);
+    vector_set(p, 0, nn);
+
+    double eta = 1.0;
+
+    for (int iters = 0; iters < imax; ++iters) {
+
+        const double beta = beta_new;
+        vector_copy(v_old, v, nn);
+        vector_scale(v_new, 1.0/beta_new, nn);
+        vector_scale(q_hat, 1.0/beta_new, nn);
+
+        vector_copy(v, v_new, nn);
+        vector_copy(q, q_hat, nn);
+        
+        sparse_matvec_acks2(&H, &X, q, z);
+        pack_flag = 2;
+        comm->reverse_comm(this);
+        more_reverse_comm(z);
+        vector_sum(v_new, 1, z, -beta, v_old, nn);
+
+        const double alpha = parallel_dot(v_new, q, nn);
+
+        vector_add(v_new, -alpha, v, nn);
+
+        // w_new = precond_solve(v_new)
+        vector_copy(q_hat, v_new, nn); // Identity preconditioner
+
+        // Jacobi preconditioner cannot be positive definite, since X-block of ACKS2 matrix contains -ve values on the diagonal
+        // https://people.maths.ox.ac.uk/wathen/preconditioning.pdf, pg. 23, 5.2. Saddle point systems
+        // for (int jj = 0; jj < nn; ++jj) {
+        //   const int j = ilist[jj];
+        //   if (atom->mask[j] & groupbit) {
+        //     q_hat[j] = v_new[j] * Hdia_inv[j];
+        //     q_hat[NN+j] = v_new[NN+j] * Xdia_inv[j];
+        //   }
+        // }
+        // // last two rows
+        // if (last_rows_flag) {
+        //   q_hat[2*NN] = v_new[2*NN];
+        //   q_hat[2*NN + 1] = v_new[2*NN + 1];
+        // }
+        // pack_flag = 3;
+        // comm->forward_comm(this);
+        // more_forward_comm(q_hat);
+
+        beta_new2 = parallel_dot(v_new, q_hat, nn);
+        // if (beta_new2 < 0) {
+        //     error->warning(FLERR,"MINRES(): Preconditioner is not positive definite, beta_new2: {}", beta_new2);
+        //     return iters;
+        // }
+
+        beta_new = sqrt(beta_new2);
+
+        const double r2 = s*alpha + c*c_old*beta;
+        const double r3 = s_old*beta;
+        const double r1_hat = c*alpha - c_old*s*beta;
+        const double r1 = sqrt(r1_hat*r1_hat + beta_new*beta_new);
+
+        c_old = c;
+        s_old = s;
+        c = r1_hat / r1;
+        s = beta_new / r1;
+
+        vector_copy(p_oold, p_old, nn);
+        vector_copy(p_old, p, nn);
+
+        vector_sum(p, 1, q, -r2, p_old, nn);
+        vector_add(p, -r3, p_oold, nn);
+        vector_scale(p, 1.0/r1, nn);
+
+        vector_add(x, beta_one*c*eta, p, nn);
+
+        residualNorm2 *= s*s;
+        if (residualNorm2 < threshold2) {
+            return iters;
+        }
+
+        eta = -s * eta;
+    }
+
+    error->warning(FLERR, "MINRES(): Failed to converge in {} iterations, estimated error: {}", imax, sqrt(residualNorm2/rhsNorm2));
+    return imax;
+}
 
 /* ---------------------------------------------------------------------- */
 
@@ -2808,6 +2989,27 @@ void FixACKS2ReaxFF::vector_add(double* dest, double c, double* v, int k)
   }
 }
 
+/* ---------------------------------------------------------------------- */
+
+void FixACKS2ReaxFF::vector_scale(double* v, double c, int k) {
+  // Scale v by c: v = c*v
+
+  int kk;
+
+  for (--k; k>=0; --k) {
+    kk = ilist[k];
+    if (atom->mask[kk] & groupbit) {
+      v[kk] = c * v[kk];
+      v[NN + kk] = c * v[NN + kk];
+    }
+  }
+
+  // last two rows
+  if (last_rows_flag) {
+    v[2*NN] = c * v[2*NN];
+    v[2*NN + 1] = c * v[2*NN + 1];
+  }
+}
 
 /* ---------------------------------------------------------------------- */
 
@@ -2830,3 +3032,23 @@ void FixACKS2ReaxFF::vector_copy(double* dest, double* v, int k)
   }
 }
 
+/* ---------------------------------------------------------------------- */
+
+void FixACKS2ReaxFF::vector_set(double* v, double c, int k) {
+  // Set all elements in v to c
+  int kk;
+
+  for (--k; k>=0; --k) {
+    kk = ilist[k];
+    if (atom->mask[kk] & groupbit) {
+      v[kk] = c;
+      v[NN + kk] = c;
+    }
+  }
+
+  // last two rows
+  if (last_rows_flag) {
+    v[2*NN] = c;
+    v[2*NN + 1] = c;
+  }
+}

@@ -57,6 +57,9 @@ class FixACKS2ReaxFF : public FixQEqReaxFF {
   //BiCGStab storage
   double *g, *q_hat, *r_hat, *y, *z;
 
+  // MINRES storage
+  double *v_old, *v, *v_new, *p_old, *p_oold;
+
   // TODO remove test/debug variables
   bool print_system;
   bool print_acks2_matrix;
@@ -110,6 +113,10 @@ class FixACKS2ReaxFF : public FixQEqReaxFF {
   std::unordered_map<int, int> construct_tag_map() const;
   crs_matrix assemble_acks2_matrix(const std::unordered_map<int, int>&) const;
   // crs_matrix __assemble_acks2_matrix(const std::unordered_map<int, int>&) const;
+
+  int MINRES(double*, double*);
+  void vector_scale(double*, double, int);
+  void vector_set(double*, double, int);
 
   bool array_vec_equal(double*, const std::vector<double>&);
   bool diag_vec_equal(double*, const std::vector<double>&);
