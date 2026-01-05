@@ -39,6 +39,8 @@
 #include <vector>
 #include <unordered_map>
 
+#include "fix_efield.h"
+
 using namespace LAMMPS_NS;
 using namespace FixConst;
 
@@ -57,7 +59,7 @@ static const char cite_fix_acks2_reax[] =
 /* ---------------------------------------------------------------------- */
 
 FixACKS2ReaxFF::FixACKS2ReaxFF(LAMMPS *lmp, int narg, char **arg) :
-  FixQEqReaxFF(lmp, narg, arg)
+  FixQEqReaxFF(lmp, narg, arg), gauss_file(nullptr)
 {
 
   // TODO Cleanup
@@ -88,6 +90,13 @@ FixACKS2ReaxFF::FixACKS2ReaxFF(LAMMPS *lmp, int narg, char **arg) :
   X.jlist = nullptr;
   X.val = nullptr;
   X.ilist = nullptr; // TODO Cleanup
+
+  // Effective electronegativities from QEqR/QTPIE
+  chi_eff = nullptr;
+  prefactor = nullptr;
+  expfactor = nullptr;
+  gauss_file = utils::strdup(arg[8]);
+  scale = 1.0;
 
   // Update comm sizes for this fix
   comm_forward = comm_reverse = 2;
@@ -120,6 +129,8 @@ FixACKS2ReaxFF::~FixACKS2ReaxFF()
 {
   if (copymode) return;
 
+  delete[] gauss_file;
+
   memory->destroy(bcut);
 
   if (!reaxflag)
@@ -130,6 +141,11 @@ FixACKS2ReaxFF::~FixACKS2ReaxFF()
 
   FixACKS2ReaxFF::deallocate_storage();
   FixACKS2ReaxFF::deallocate_matrix();
+
+  memory->destroy(gauss_exp);
+  memory->destroy(prefactor);
+  memory->destroy(expfactor);
+
 }
 
 /* ---------------------------------------------------------------------- */
@@ -153,6 +169,55 @@ void FixACKS2ReaxFF::post_constructor()
 
 void FixACKS2ReaxFF::pertype_parameters(char *arg)
 {
+
+  // Read Gaussian orbital exponents for QEqR effective electronegativity
+  constexpr double ANGSTROM_TO_BOHRRADIUS_SQ = 3.571064831;
+
+  memory->create(gauss_exp,atom->ntypes+1,"acks2/reaxff:gauss_exp");
+  if (comm->me == 0) {
+    gauss_exp[0] = 0.0;
+    try {
+      FILE *fp = utils::open_potential(gauss_file, lmp, nullptr);
+      if (!fp) throw TokenizerException("Fix acks2/reaxff: could not open gauss file", gauss_file);
+      TextFileReader reader(fp,"acks2/reaxff gaussian exponents");
+      reader.ignore_comments = true;
+      for (int i = 1; i <= atom->ntypes; i++) {
+        const char *line = reader.next_line();
+        if (!line)
+          throw TokenizerException("Fix acks2/reaxff: Incorrect number of atom types in gauss file","");
+        ValueTokenizer values(line);
+
+        if (values.count() != 2)
+          throw TokenizerException("Fix acks2/reaxff: Incorrect number of values per line "
+                                   "in gauss file",std::to_string(values.count()));
+
+        int itype = values.next_int();
+        if ((itype < 1) || (itype > atom->ntypes))
+          throw TokenizerException("Fix acks2/reaxff: Invalid atom type in gauss file",
+                                   std::to_string(itype));
+
+        double exp = values.next_double();
+        if (exp < 0)
+          throw TokenizerException("Fix acks2/reaxff: Invalid orbital exponent in gauss file",
+                                   std::to_string(exp));
+        gauss_exp[itype] = exp * ANGSTROM_TO_BOHRRADIUS_SQ;
+      }
+      fclose(fp);
+    } catch (std::exception &e) {
+      error->one(FLERR,e.what());
+    }
+  }
+
+  MPI_Bcast(gauss_exp,atom->ntypes+1,MPI_DOUBLE,0,world);
+
+  // calculate a cutoff distance to neglect overlap integrals in calc_chi_eff()
+  // when less than pow(10, -olap_cut)
+  const double exp_min = find_min_exp(gauss_exp, atom->ntypes+1);
+  const int olap_cut = 10;
+  dist_cutoff_sq = 2 * olap_cut * log(10.0) / exp_min;
+
+
+  // Read chi, eta, gamma, bcut_acks2, bond_softness
   if (utils::strmatch(arg,"^reaxff")) {
     reaxflag = 1;
     Pair *pair = force->pair_match("^reaxff",0);
@@ -246,7 +311,8 @@ void FixACKS2ReaxFF::allocate_storage()
   memory->create(b_s,size,"acks2:b_s");
 
   memory->create(Hdia_inv,nmax,"acks2:Hdia_inv");
-  memory->create(chi_field,nmax,"acks2:chi_field");
+  // memory->create(chi_field,nmax,"acks2:chi_field");
+  memory->create(chi_eff, nmax, "acks2:chi_eff");
 
   memory->create(X_diag,nmax,"acks2:X_diag");
   memory->create(Xdia_inv,nmax,"acks2:Xdia_inv");
@@ -285,6 +351,8 @@ void FixACKS2ReaxFF::deallocate_storage()
   memory->destroy(r_hat);
   memory->destroy(y);
   memory->destroy(z);
+
+  memory->destroy(chi_eff);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -322,6 +390,8 @@ void FixACKS2ReaxFF::init()
   FixQEqReaxFF::init();
 
   init_bondcut();
+
+  init_olap();
 }
 
 /* ---------------------------------------------------------------------- */
@@ -343,15 +413,133 @@ void FixACKS2ReaxFF::init_bondcut()
 
 /* ---------------------------------------------------------------------- */
 
+void FixACKS2ReaxFF::init_olap() // From FixQtpieReaxFF::init_olap()
+{
+  int i,j;
+  int ntypes;
+  double expa,expb,expsum,expnorm;
+
+  ntypes = atom->ntypes;
+  if (prefactor == nullptr)
+    memory->create(prefactor,ntypes+1,ntypes+1,"acks2:overlap_prefactor");
+  if (expfactor == nullptr)
+    memory->create(expfactor,ntypes+1,ntypes+1,"acks2:overlap_expfactor");
+
+  for (i = 1; i <= ntypes; ++i)
+    for (j = 1; j <= ntypes; ++j) {
+      expa = gauss_exp[i];
+      expb = gauss_exp[j];
+      expsum = expa + expb;
+      expnorm = expa * expb / expsum;
+      prefactor[i][j] = pow((4.0 * expnorm / expsum), 0.75);
+      expfactor[i][j] = expnorm;
+    }
+}
+
+/* ---------------------------------------------------------------------- */
+
+void FixACKS2ReaxFF::calc_chi_eff() // From FixQEqRelReaxFF::calc_chi_eff()
+{
+  int nt;
+  if (reaxff) {
+    nt = reaxff->list->inum + reaxff->list->gnum;
+  } else {
+    nt = list->inum + list->gnum;
+  }
+
+  memset(&chi_eff[0], 0, atom->nmax * sizeof(double));
+
+  const auto x = (const double *const *) atom->x;
+  const int *type = atom->type;
+
+  double dx, dy, dz, dist_sq, overlap, sum_n, sum_d, chia, phia, phib;
+  int i, j;
+
+  // check ghost atoms are stored up to the distance cutoff for overlap integrals
+  const double comm_cutoff = MAX(neighbor->cutneighmax, comm->cutghostuser);
+  if (comm_cutoff*comm_cutoff < dist_cutoff_sq) {
+    error->all(FLERR, Error::NOLASTLINE,
+               "Comm cutoff {} is smaller than distance cutoff {} for overlap integrals in fix {}. "
+               "Increase accordingly using comm_modify cutoff",
+               comm_cutoff, sqrt(dist_cutoff_sq), style);
+  }
+
+  // efield energy is in real units of kcal/mol, factor needed for conversion to eV
+  const double qe2f = force->qe2f;
+  const double factor = 1.0 / qe2f;
+
+  if (efield) {
+    if (efield->varflag != FixEfield::CONSTANT) efield->update_efield_variables();
+
+    // compute chi_eff for each local atom
+    for (i = 0; i < nn; i++) {
+      chia = chi[type[i]];
+      if (efield->varflag != FixEfield::ATOM) {
+        phia = -factor * (x[i][0] * efield->ex + x[i][1] * efield->ey + x[i][2] * efield->ez);
+      } else {    // atom-style potential from FixEfield
+        phia = efield->efield[i][3];
+      }
+
+      sum_n = 0.0;
+      sum_d = 0.0;
+
+      for (j = 0; j < nt; j++) {
+          dx = x[i][0] - x[j][0];
+          dy = x[i][1] - x[j][1];
+          dz = x[i][2] - x[j][2];
+          dist_sq = (dx*dx + dy*dy + dz*dz);
+
+        if (dist_sq < dist_cutoff_sq) {
+
+          // overlap integral of two normalised 1s Gaussian type orbitals
+          overlap = prefactor[type[i]][type[j]] * exp(-expfactor[type[i]][type[j]] * dist_sq);
+
+          if (efield->varflag != FixEfield::ATOM) {
+            phib = -factor * (x[j][0] * efield->ex + x[j][1] * efield->ey + x[j][2] * efield->ez);
+          } else {    // atom-style potential from FixEfield
+            phib = efield->efield[j][3];
+          }
+          sum_n += phib * overlap;
+          sum_d += overlap;
+        }
+      }
+      if (sum_d != 0.0)
+        chi_eff[i] = chia + scale * (phia - sum_n / sum_d);
+      else
+        chi_eff[i] = chia;
+    }
+  } else {
+    for (i = 0; i < nn; i++) { chi_eff[i] = chi[type[i]]; }
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+
+double FixACKS2ReaxFF::find_min_exp(const double *array, const int array_length) // FixQtpieReaxFF::find_min_exp()
+{
+  // index of first gaussian orbital exponent is 1
+  double exp_min = array[1];
+  for (int i = 2; i < array_length; i++)
+  {
+    if (array[i] < exp_min)
+      exp_min = array[i];
+  }
+  return exp_min;
+}
+
+/* ---------------------------------------------------------------------- */
+
 void FixACKS2ReaxFF::init_storage()
 {
-  if (efield) get_chi_field();
+  // if (efield) get_chi_field();
+  calc_chi_eff();
 
   for (int ii = 0; ii < NN; ii++) {
     int i = ilist[ii];
     if (atom->mask[i] & groupbit) {
-      b_s[i] = -chi[atom->type[i]];
-      if (efield) b_s[i] -= chi_field[i];
+      // b_s[i] = -chi[atom->type[i]];
+      // if (efield) b_s[i] -= chi_field[i];
+      b_s[i] = -chi_eff[i];
       b_s[NN + i] = 0.0;
       s[i] = 0.0;
       s[NN + i] = 0.0;
@@ -391,7 +579,8 @@ void FixACKS2ReaxFF::pre_force(int /*vflag*/)
   if (atom->nlocal > n_cap*DANGER_ZONE || m_fill > m_cap*DANGER_ZONE)
     reallocate_matrix();
 
-  if (efield) get_chi_field();
+  // if (efield) get_chi_field();
+  calc_chi_eff();
 
   init_matvec();
 
@@ -451,8 +640,9 @@ void FixACKS2ReaxFF::init_matvec() // Calculates pre-conditioner entries, pre-co
 
       /* init pre-conditioner for H and init solution vectors */
       Hdia_inv[i] = 1. / eta[atom->type[i]];
-      b_s[i] = -chi[atom->type[i]];
-      if (efield) b_s[i] -= chi_field[i];
+      // b_s[i] = -chi[atom->type[i]];
+      // if (efield) b_s[i] -= chi_field[i];
+      b_s[i] = -chi_eff[i];
       b_s[NN+i] = 0.0;
 
       /* cubic extrapolation for s from previous solutions */

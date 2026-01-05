@@ -57,6 +57,15 @@ class FixACKS2ReaxFF : public FixQEqReaxFF {
   //BiCGStab storage
   double *g, *q_hat, *r_hat, *y, *z;
 
+  // Effective electronegativities from QTPIE/QEqR
+  double* chi_eff;         // array of effective electronegativities
+  char *gauss_file;        // input file for gaussian orbital exponents
+  double *gauss_exp;       // array of gaussian orbital exponents for each atom type
+  double **prefactor;      // factor used in computation of overlap integrals
+  double **expfactor;      // factor used in exponential term of overlap integrals
+  double dist_cutoff_sq;   // separation distance squared beyond which overlap integrals are neglected
+  double scale;            // scaling factor for electric polarization effects
+
   // TODO remove test/debug variables
   bool print_system;
   bool print_acks2_matrix;
@@ -84,6 +93,10 @@ class FixACKS2ReaxFF : public FixQEqReaxFF {
   void sparse_matvec_acks2(sparse_matrix *, sparse_matrix *, double *, double *);
 
   // TODO Cleanup
+  virtual void calc_chi_eff();
+  double find_min_exp(const double*, const int);
+  void init_olap();
+
   std::string append_timestep(const std::string&);
   void print_sparse_matrix(sparse_matrix&, const std::string&); // TODO: Remove after debugging ACKS2?
   void print_matrix_diagonals();
