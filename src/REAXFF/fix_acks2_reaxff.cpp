@@ -112,6 +112,13 @@ FixACKS2ReaxFF::FixACKS2ReaxFF(LAMMPS *lmp, int narg, char **arg) :
   vec_X_diag = {};
   vec_Xdia_inv = {};
 
+  // Use QEqR formulation in ACKS2 TODO Cleanup
+  use_chi_eff = false;
+  int iarg = 8;
+  while (iarg < narg) {
+    if (strcmp(arg[iarg], "use_chi_eff") == 0) use_chi_eff = true;
+    iarg++;
+  }
 }
 
 /* ---------------------------------------------------------------------- */

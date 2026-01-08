@@ -57,6 +57,9 @@ class FixACKS2ReaxFF : public FixQEqReaxFF {
   //BiCGStab storage
   double *g, *q_hat, *r_hat, *y, *z;
 
+  // Use QEqR formulation in ACKS2 TODO Cleanup
+  bool use_chi_eff;
+
   // TODO remove test/debug variables
   bool print_system;
   bool print_acks2_matrix;

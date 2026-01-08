@@ -104,6 +104,7 @@ FixQEqReaxFF::FixQEqReaxFF(LAMMPS *lmp, int narg, char **arg) :
   while (iarg < narg) {
     if (strcmp(arg[iarg],"dual") == 0) dual_enabled = 1;
     else if (strcmp(arg[iarg],"nowarn") == 0) maxwarn = 0;
+    else if (strcmp(arg[iarg], "use_chi_eff") == 0) {} // Used only in ACKS2 TODO Cleanup
     else if (strcmp(arg[iarg],"maxiter") == 0) {
       if (iarg+1 > narg-1)
         error->all(FLERR,"Illegal fix {} command", style);
