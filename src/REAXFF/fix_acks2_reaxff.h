@@ -31,6 +31,7 @@ FixStyle(acks2/reaxff,FixACKS2ReaxFF);
 #include "crs_matrix.h"
 #include "vector_utils.h"
 #include "chi_eff.h"
+#include "fix_efield.h"
 
 namespace LAMMPS_NS {
 
