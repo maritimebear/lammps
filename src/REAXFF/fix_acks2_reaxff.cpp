@@ -114,11 +114,15 @@ FixACKS2ReaxFF::FixACKS2ReaxFF(LAMMPS *lmp, int narg, char **arg) :
 
   // Use QEqR formulation in ACKS2 TODO Cleanup
   use_chi_eff = false;
+  chi_eff = nullptr;
+
   int iarg = 8;
   while (iarg < narg) {
     if (strcmp(arg[iarg], "use_chi_eff") == 0) use_chi_eff = true;
     iarg++;
   }
+
+  init_olap();
 }
 
 /* ---------------------------------------------------------------------- */
@@ -276,6 +280,8 @@ void FixACKS2ReaxFF::allocate_storage()
   vec_Hdia_inv.resize(nmax, 0.0);
   vec_X_diag.resize(nmax, 0.0);
   vec_Xdia_inv.resize(nmax, 0.0);
+
+  memory->create(chi_eff, nmax, "acks2:chi_eff");
 }
 
 /* ---------------------------------------------------------------------- */
@@ -292,6 +298,8 @@ void FixACKS2ReaxFF::deallocate_storage()
   memory->destroy(r_hat);
   memory->destroy(y);
   memory->destroy(z);
+
+  memory->destroy(chi_eff);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -352,13 +360,21 @@ void FixACKS2ReaxFF::init_bondcut()
 
 void FixACKS2ReaxFF::init_storage()
 {
-  if (efield) get_chi_field();
+  if (use_chi_eff) {
+      calc_chi_eff();
+  } else {
+      if (efield) get_chi_field();
+  }
 
   for (int ii = 0; ii < NN; ii++) {
     int i = ilist[ii];
     if (atom->mask[i] & groupbit) {
-      b_s[i] = -chi[atom->type[i]];
-      if (efield) b_s[i] -= chi_field[i];
+      if (use_chi_eff) {
+          b_s[i] = -chi_eff[i];
+      } else {
+          b_s[i] = -chi[atom->type[i]];
+          if (efield) b_s[i] -= chi_field[i];
+      }
       b_s[NN + i] = 0.0;
       s[i] = 0.0;
       s[NN + i] = 0.0;
@@ -398,7 +414,11 @@ void FixACKS2ReaxFF::pre_force(int /*vflag*/)
   if (atom->nlocal > n_cap*DANGER_ZONE || m_fill > m_cap*DANGER_ZONE)
     reallocate_matrix();
 
-  if (efield) get_chi_field();
+  if (use_chi_eff) {
+      calc_chi_eff();
+  } else {
+      if (efield) get_chi_field();
+  }
 
   init_matvec();
 
@@ -458,8 +478,12 @@ void FixACKS2ReaxFF::init_matvec() // Calculates pre-conditioner entries, pre-co
 
       /* init pre-conditioner for H and init solution vectors */
       Hdia_inv[i] = 1. / eta[atom->type[i]];
-      b_s[i] = -chi[atom->type[i]];
-      if (efield) b_s[i] -= chi_field[i];
+      if (use_chi_eff) {
+          b_s[i] = -chi_eff[i];
+      } else {
+          b_s[i] = -chi[atom->type[i]];
+          if (efield) b_s[i] -= chi_field[i];
+      }
       b_s[NN+i] = 0.0;
 
       /* cubic extrapolation for s from previous solutions */
@@ -2437,6 +2461,102 @@ bool FixACKS2ReaxFF::diag_vec_equal(double* diag, const std::vector<double>& vec
         if (vec.at(i) != diag[i]) return false;
     }
     return true;
+}
+
+/* ---------------------------------------------------------------------- */
+
+void FixACKS2ReaxFF::init_olap() {
+    // Calculate terms in overlap integral for each pair of atom types
+    // Following FixQtpieReaxFF::init_olap()
+    for (const auto& [k1, v1] : chi_eff::gauss_exp) {
+        for (const auto& [k2, v2] : chi_eff::gauss_exp) {
+            const std::pair<std::string, std::string> elem_pair = std::make_pair(k1, k2);
+            this->expfactor[elem_pair] = chi_eff::calculate_expfactor(v1, v2);
+            this->prefactor[elem_pair] = chi_eff::calculate_prefactor(v1, v2);
+        }
+    }
+}
+
+/* ---------------------------------------------------------------------- */
+
+void FixACKS2ReaxFF::calc_chi_eff() {
+    // Calculate effective electronegativity for use with electric fields and periodic boundaries
+    // Following FixQEqRelReaxFF::calc_chi_eff()
+
+    int nt;
+    double phia, phib;
+
+    if (reaxff) {
+        nt = reaxff->list->inum + reaxff->list->gnum;
+    } else {
+        nt = list->inum + list->gnum;
+    }
+
+    memset(&chi_eff[0], 0, atom->nmax * sizeof(double));
+
+    // check ghost atoms are stored up to the distance cutoff for overlap integrals
+    const double comm_cutoff = MAX(neighbor->cutneighmax, comm->cutghostuser);
+    if (comm_cutoff*comm_cutoff < chi_eff::dist_cutoff_sq) {
+    error->all(FLERR, Error::NOLASTLINE,
+               "Comm cutoff {} is smaller than distance cutoff {} for overlap integrals in fix {}. "
+               "Increase accordingly using comm_modify cutoff",
+               comm_cutoff, sqrt(chi_eff::dist_cutoff_sq), style);
+    }
+
+    // efield energy is in real units of kcal/mol, factor needed for conversion to eV
+    const double qe2f = force->qe2f;
+    const double factor = 1.0 / qe2f;
+
+    if (efield) {
+        if (efield->varflag != FixEfield::CONSTANT) efield->update_efield_variables();
+
+        // compute chi_eff for each local atom
+        for (int i = 0; i < nn; ++i) {
+            const double chia = chi[atom->type[i]];
+            if (efield->varflag != FixEfield::ATOM) {
+                phia = -factor * (atom->x[i][0] * efield->ex + atom->x[i][1] * efield->ey + atom->x[i][2] * efield->ez);
+            } else {    // atom-style potential from FixEfield
+                phia = efield->efield[i][3];
+            }
+
+            double sum_n = 0.0;
+            double sum_d = 0.0;
+            const std::string elem_i = reaxff->eletype[atom->type[i]];
+
+            for (int j = 0; j < nt; ++j) {
+                const double dx = atom->x[i][0] - atom->x[j][0];
+                const double dy = atom->x[i][1] - atom->x[j][1];
+                const double dz = atom->x[i][2] - atom->x[j][2];
+                const double dist_sq = (dx*dx + dy*dy + dz*dz);
+
+                if (dist_sq < chi_eff::dist_cutoff_sq) {
+                    // Calculate overlap integral
+                    const std::string elem_j = reaxff->eletype[atom->type[j]];
+                    const std::pair<std::string, std::string> elem_pair = std::make_pair(elem_i, elem_j);
+                    const double overlap = prefactor.at(elem_pair) * exp(-expfactor.at(elem_pair) * dist_sq);
+
+                    if (efield->varflag != FixEfield::ATOM) {
+                        phib = -factor * (atom->x[j][0] * efield->ex + atom->x[j][1] * efield->ey + atom->x[j][2] * efield->ez);
+                    } else {    // atom-style potential from FixEfield
+                        phib = efield->efield[j][3];
+                    }
+
+                    sum_n += phib * overlap;
+                    sum_d += overlap;
+                }
+            } // for (j)
+
+            // Calculate effective electronegativity
+            if (sum_d != 0.0) {
+                chi_eff[i] = chia + chi_eff::scale * (phia - sum_n / sum_d);
+            } else {
+                chi_eff[i] = chia;
+            }
+        } // for (i)
+
+    } else { // !(efield)
+        for (int i = 0; i < nn; i++) { chi_eff[i] = chi[atom->type[i]]; }
+    }
 }
 
 /* ---------------------------------------------------------------------- */
