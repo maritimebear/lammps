@@ -25,8 +25,13 @@ FixStyle(acks2/reaxff,FixACKS2ReaxFF);
 #include <unordered_map>
 #include <algorithm>
 #include <numeric>
+#include <map>
+#include <string>
+#include <utility>
 #include "crs_matrix.h"
 #include "vector_utils.h"
+#include "chi_eff.h"
+#include "fix_efield.h"
 
 namespace LAMMPS_NS {
 
@@ -56,6 +61,11 @@ class FixACKS2ReaxFF : public FixQEqReaxFF {
 
   //BiCGStab storage
   double *g, *q_hat, *r_hat, *y, *z;
+
+  // Use QEqR formulation in ACKS2 TODO Cleanup
+  bool use_chi_eff;
+  double *chi_eff;         // array of effective electronegativities
+  std::map<std::pair<std::string, std::string>, double> prefactor, expfactor;
 
   // TODO remove test/debug variables
   bool print_system;
@@ -119,6 +129,9 @@ class FixACKS2ReaxFF : public FixQEqReaxFF {
 
   bool array_vec_equal(double*, const std::vector<double>&);
   bool diag_vec_equal(double*, const std::vector<double>&);
+
+  void init_olap();
+  void calc_chi_eff();
 
   int pack_forward_comm(int, int *, double *, int, int *) override;
   void unpack_forward_comm(int, int, double *) override;

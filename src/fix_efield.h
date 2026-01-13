@@ -28,6 +28,7 @@ class FixEfield : public Fix {
   friend class FixQEqReaxFF;
   friend class FixQEqRelReaxFF;
   friend class FixQtpieReaxFF;
+  friend class FixACKS2ReaxFF;
 
  public:
   FixEfield(class LAMMPS *, int, char **);
