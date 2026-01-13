@@ -2524,6 +2524,7 @@ void FixACKS2ReaxFF::calc_chi_eff() {
             const std::string elem_i = reaxff->eletype[atom->type[i]];
 
             for (int j = 0; j < nt; ++j) {
+                //TODO if (j == i) continue?
                 const double dx = atom->x[i][0] - atom->x[j][0];
                 const double dy = atom->x[i][1] - atom->x[j][1];
                 const double dz = atom->x[i][2] - atom->x[j][2];

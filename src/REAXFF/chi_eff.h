@@ -30,7 +30,7 @@ constexpr int olap_cut = 10;
 
 const double exp_min = std::min_element(gauss_exp.cbegin(), gauss_exp.cend(),
         [] (const auto& lhs, const auto& rhs) { return lhs.second < rhs.second; }
-        )->second; // std::min_element -> std::map::iterator, iterator to pair of <key, value>
+        )->second; // std::min_element() -> std::map::iterator, iterator to pair of <key, value>
 
 const double dist_cutoff_sq = 2 * olap_cut * std::log(10.0) / exp_min;
 
