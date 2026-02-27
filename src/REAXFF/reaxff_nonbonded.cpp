@@ -283,8 +283,8 @@ namespace ReaxFF {
                                 f_tmp,delij[0],delij[1],delij[2]);
             }
 
-            rvec_ScaledAdd( workspace->f[i], -d_bond_softness, nbr_pj->dvec );
-            rvec_ScaledAdd( workspace->f[j], d_bond_softness, nbr_pj->dvec );
+            // rvec_ScaledAdd( workspace->f[i], -d_bond_softness, nbr_pj->dvec );
+            // rvec_ScaledAdd( workspace->f[j], d_bond_softness, nbr_pj->dvec );
           }
         }
       }
@@ -459,8 +459,8 @@ namespace ReaxFF {
                                 f_tmp,delij[0],delij[1],delij[2]);
             }
 
-            rvec_ScaledAdd( workspace->f[i], -d_bond_softness, nbr_pj->dvec );
-            rvec_ScaledAdd( workspace->f[j], d_bond_softness, nbr_pj->dvec );
+            // rvec_ScaledAdd( workspace->f[i], -d_bond_softness, nbr_pj->dvec );
+            // rvec_ScaledAdd( workspace->f[j], d_bond_softness, nbr_pj->dvec );
           }
         }
       }
