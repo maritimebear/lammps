@@ -48,7 +48,7 @@ namespace ReaxFF {
 
       if (system->acks2_flag) {
         /* energy due to coupling with kinetic energy potential */
-        en_tmp += KCALpMOL_to_EV * q * workspace->s[ system->N + i ];
+        // en_tmp += KCALpMOL_to_EV * q * workspace->s[ system->N + i ];
       }
 
       data->my_en.e_pol += en_tmp;
@@ -263,7 +263,7 @@ namespace ReaxFF {
             e_ele = -0.5 * KCALpMOL_to_EV * bond_softness
                          * SQR( effpot_diff );
 
-            data->my_en.e_ele += e_ele;
+            // data->my_en.e_ele += e_ele;
 
             /* forces contribution */
             d_bond_softness = system->reax_param.gp.l[34]
@@ -439,7 +439,7 @@ namespace ReaxFF {
             e_ele = -0.5 * KCALpMOL_to_EV * bond_softness
                          * SQR( effpot_diff );
 
-            data->my_en.e_ele += e_ele;
+            // data->my_en.e_ele += e_ele;
 
             /* forces contribution */
             d_bond_softness = system->reax_param.gp.l[34]
