@@ -61,6 +61,7 @@ void PairDipoleInducedAcciarri::compute(int eflag, int vflag) {
     ev_init(eflag, vflag);
 
     double **x = atom->x;
+    double *q = atom->q;
     double **f = atom->f;
     int *type = atom->type;
     int nlocal = atom->nlocal;
@@ -78,6 +79,7 @@ void PairDipoleInducedAcciarri::compute(int eflag, int vflag) {
         double xtmp = x[i][0];
         double ytmp = x[i][1];
         double ztmp = x[i][2];
+        double q2tmp = q[i] * q[i];
         int itype = type[i];
         int* jlist = firstneigh[i];
         int jnum = numneigh[i];
@@ -98,7 +100,7 @@ void PairDipoleInducedAcciarri::compute(int eflag, int vflag) {
                 double r4 = rsq * rsq; // r^4
                 double r6 = r4 * rsq; // r^6
                 double rratio8 = pow((r_phi_sq[itype][jtype] / rsq), 4.0); // (r_phi/r)^8
-                double fpair = factor * (4.0 * k[itype][jtype] / r6) * (3.0 * rratio8 - 1); // Force per unit length
+                double fpair = factor * q2tmp * (4.0 * k[itype][jtype] / r6) * (3.0 * rratio8 - 1); // Force per unit length
 
                 f[i][0] += delx * fpair;
                 f[i][1] += dely * fpair;
@@ -110,7 +112,7 @@ void PairDipoleInducedAcciarri::compute(int eflag, int vflag) {
                 }
 
                 if (eflag) {
-                    evdwl = factor * (k[itype][jtype] / r4) * (rratio8 - 1);
+                    evdwl = factor * q2tmp * (k[itype][jtype] / r4) * (rratio8 - 1);
                 }
                 if (evflag) ev_tally(i, j, nlocal, newton_pair, evdwl, 0.0, fpair, delx, dely, delz);
             }
@@ -168,7 +170,7 @@ void PairDipoleInducedAcciarri::coeff(int narg, char** arg) {
     utils::bounds(FLERR, arg[0], 1, atom->ntypes, ilo, ihi, error);
     utils::bounds(FLERR, arg[1], 1, atom->ntypes, jlo, jhi, error);
 
-    double q2_8pieps0 = utils::numeric(FLERR, arg[2], false, lmp); // (charge of ion)^2 / (8pi * vacuum pemittivity)
+    double factor = utils::numeric(FLERR, arg[2], false, lmp); // 1 / (8pi * vacuum pemittivity)
     double rel_pol = utils::numeric(FLERR, arg[3], false, lmp); // relative polarisability
     double bohr_radius = utils::numeric(FLERR, arg[4], false, lmp);
     // Coefficients to calculate r_phi = c * a_in
@@ -178,7 +180,7 @@ void PairDipoleInducedAcciarri::coeff(int narg, char** arg) {
     if (narg == 10) cut_tmp = utils::numeric(FLERR, arg[7], false, lmp);
 
     // Calculate k and r_phi_sq
-    double k_tmp = q2_8pieps0 * rel_pol * pow(bohr_radius, 3.0);
+    double k_tmp = factor * rel_pol * pow(bohr_radius, 3.0);
     double r_phi_sq_tmp = pow((c * a_in), 2.0);
 
     int count = 0;
