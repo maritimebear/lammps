@@ -17,7 +17,7 @@
 // Plasma Sources Sci. Technol. 31 (2022) 125005.
 // Implementation author: John Mampilli, Imperial College London, j.mampilli@imperial.ac.uk
 
-#include "pair_dipole_induced.h"
+#include "pair_dipole_induced_acciarri.h"
 
 #include "atom.h"
 #include "comm.h"
@@ -34,7 +34,7 @@ using namespace LAMMPS_NS;
 
 /* ---------------------------------------------------------------------- */
 
-PairDipoleInduced::PairDipoleInduced(LAMMPS* lmp) : Pair(lmp),
+PairDipoleInducedAcciarri::PairDipoleInducedAcciarri(LAMMPS* lmp) : Pair(lmp),
     k(nullptr), r_phi_sq(nullptr), cut(nullptr), cut_global(0.0) {
 
     single_enable = 1;
@@ -44,7 +44,7 @@ PairDipoleInduced::PairDipoleInduced(LAMMPS* lmp) : Pair(lmp),
 
 /* ---------------------------------------------------------------------- */
 
-PairDipoleInduced::~PairDipoleInduced() {
+PairDipoleInducedAcciarri::~PairDipoleInducedAcciarri() {
     if (allocated) {
         memory->destroy(setflag);
         memory->destroy(cutsq);
@@ -56,7 +56,7 @@ PairDipoleInduced::~PairDipoleInduced() {
 
 /* ---------------------------------------------------------------------- */
 
-void PairDipoleInduced::compute(int eflag, int vflag) {
+void PairDipoleInducedAcciarri::compute(int eflag, int vflag) {
     double evdwl = 0.0; // TODO evdwl or ecoul?
     ev_init(eflag, vflag);
 
@@ -85,7 +85,7 @@ void PairDipoleInduced::compute(int eflag, int vflag) {
         // Loop over neighbour atoms
         for (int jj = 0; jj < jnum; ++jj) {
             int j = jlist[jj]; // Local index of current neighbour atom
-            double factor = special_lj[sbmask(j)]; // TODO special_lj or special_coul? Also change in PairDipoleInduced::single()
+            double factor = special_lj[sbmask(j)]; // TODO special_lj or special_coul? Also change in PairDipoleInducedAcciarri::single()
             j &= NEIGHMASK;
 
             double delx = xtmp - x[j][0];
@@ -121,7 +121,7 @@ void PairDipoleInduced::compute(int eflag, int vflag) {
 
 /* ---------------------------------------------------------------------- */
 
-void PairDipoleInduced::allocate() {
+void PairDipoleInducedAcciarri::allocate() {
     // allocate all arrays
     allocated = 1;
     int np1 = atom->ntypes + 1;
@@ -141,7 +141,7 @@ void PairDipoleInduced::allocate() {
 
 /* ---------------------------------------------------------------------- */
 
-void PairDipoleInduced::settings(int narg, char** arg) {
+void PairDipoleInducedAcciarri::settings(int narg, char** arg) {
    // global settings
    if (narg != 1) error->all(FLERR, "Pair style dipole/induced must have exactly one argument");
    cut_global = utils::numeric(FLERR, arg[0], false, lmp);
@@ -159,7 +159,7 @@ void PairDipoleInduced::settings(int narg, char** arg) {
 
 /* ---------------------------------------------------------------------- */
 
-void PairDipoleInduced::coeff(int narg, char** arg) {
+void PairDipoleInducedAcciarri::coeff(int narg, char** arg) {
     // set pair coeffs
     if (narg < 7 || narg > 8) error->all(FLERR, "Incorrect args for pair coefficients" + utils::errorurl(21));
     if (!allocated) allocate();
@@ -197,7 +197,7 @@ void PairDipoleInduced::coeff(int narg, char** arg) {
 
 /* ---------------------------------------------------------------------- */
 
-double PairDipoleInduced::init_one(int i, int j) {
+double PairDipoleInducedAcciarri::init_one(int i, int j) {
     // init for one type pair i,j and corresponding j,i
     if (setflag[i][j] == 0) {
         error->all(FLERR, Error::NOLASTLINE,
@@ -217,7 +217,7 @@ double PairDipoleInduced::init_one(int i, int j) {
 
 /* ---------------------------------------------------------------------- */
 
-void PairDipoleInduced::write_restart(FILE* fp) {
+void PairDipoleInducedAcciarri::write_restart(FILE* fp) {
     // proc 0 writes to restart file
     write_restart_settings(fp);
 
@@ -235,7 +235,7 @@ void PairDipoleInduced::write_restart(FILE* fp) {
 
 /* ---------------------------------------------------------------------- */
 
-void PairDipoleInduced::read_restart(FILE* fp) {
+void PairDipoleInducedAcciarri::read_restart(FILE* fp) {
     // proc 0 reads from restart file, bcasts
     read_restart_settings(fp);
     allocate();
@@ -260,7 +260,7 @@ void PairDipoleInduced::read_restart(FILE* fp) {
 
 /* ---------------------------------------------------------------------- */
 
-void PairDipoleInduced::write_restart_settings(FILE* fp) {
+void PairDipoleInducedAcciarri::write_restart_settings(FILE* fp) {
     // proc 0 writes to restart file
     fwrite(&cut_global, sizeof(double), 1, fp);
     fwrite(&offset_flag, sizeof(int), 1, fp);
@@ -269,7 +269,7 @@ void PairDipoleInduced::write_restart_settings(FILE* fp) {
 
 /* ---------------------------------------------------------------------- */
 
-void PairDipoleInduced::read_restart_settings(FILE* fp) {
+void PairDipoleInducedAcciarri::read_restart_settings(FILE* fp) {
     // proc 0 reads from restart file, bcasts
     if (comm->me == 0) {
         utils::sfread(FLERR, &cut_global, sizeof(double), 1, fp, nullptr, error);
@@ -283,7 +283,7 @@ void PairDipoleInduced::read_restart_settings(FILE* fp) {
 
 /* ---------------------------------------------------------------------- */
 
-void PairDipoleInduced::write_data(FILE* fp) {
+void PairDipoleInducedAcciarri::write_data(FILE* fp) {
     // proc 0 writes to data file
     for (int i = 1; i <= atom->ntypes; ++i) {
         fprintf(fp, "%d %g %g\n", i, k[i][i], r_phi_sq[i][i]);
@@ -292,7 +292,7 @@ void PairDipoleInduced::write_data(FILE* fp) {
 
 /* ---------------------------------------------------------------------- */
 
-void PairDipoleInduced::write_data_all(FILE* fp) {
+void PairDipoleInducedAcciarri::write_data_all(FILE* fp) {
     // proc 0 writes all pairs to data file
     for (int i = 1; i <= atom->ntypes; ++i) {
         for (int j = i; j <= atom->ntypes; ++j) {
@@ -303,7 +303,7 @@ void PairDipoleInduced::write_data_all(FILE* fp) {
 
 /* ---------------------------------------------------------------------- */
 
-double PairDipoleInduced::single(int /*i*/, int /*j*/, int itype, int jtype, double rsq,
+double PairDipoleInducedAcciarri::single(int /*i*/, int /*j*/, int itype, int jtype, double rsq,
                                  double /*factor_coul*/, double factor_lj, double &fforce) {
     // Compute force and energy for a single pair of atoms
     // Force per unit distance written to double& fforce, energy returned
@@ -319,7 +319,7 @@ double PairDipoleInduced::single(int /*i*/, int /*j*/, int itype, int jtype, dou
 
 /* ---------------------------------------------------------------------- */
 
-void* PairDipoleInduced::extract(const char* str, int& dim) {
+void* PairDipoleInducedAcciarri::extract(const char* str, int& dim) {
     dim = 2; // what is this
     if (strcmp(str, "k") == 0) return (void *) k;
     if (strcmp(str, "r_phi_sq") == 0) return (void *) r_phi_sq;

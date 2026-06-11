@@ -13,20 +13,20 @@
 
 #ifdef PAIR_CLASS
 // clang-format off
-PairStyle(dipole/induced,PairDipoleInduced);
+PairStyle(dipole/induced/acciarri,PairDipoleInducedAcciarri);
 // clang-format on
 #else
-#ifndef LMP_PAIR_DIPOLE_INDUCED_H
-#define LMP_PAIR_DIPOLE_INDUCED_H
+#ifndef LMP_PAIR_DIPOLE_INDUCED_ACCIARRI_H
+#define LMP_PAIR_DIPOLE_INDUCED_ACCIARRI_H
 
 #include "pair.h"
 
 namespace LAMMPS_NS {
 
-class PairDipoleInduced : public Pair {
+class PairDipoleInducedAcciarri : public Pair {
     public:
-        PairDipoleInduced(class LAMMPS*);
-        ~PairDipoleInduced() override;
+        PairDipoleInducedAcciarri(class LAMMPS*);
+        ~PairDipoleInducedAcciarri() override;
 
         void compute(int, int) override;
         void settings(int, char **) override;
