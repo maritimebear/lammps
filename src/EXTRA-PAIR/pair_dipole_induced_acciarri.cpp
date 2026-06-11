@@ -79,7 +79,7 @@ void PairDipoleInducedAcciarri::compute(int eflag, int vflag) {
         double xtmp = x[i][0];
         double ytmp = x[i][1];
         double ztmp = x[i][2];
-        double q2tmp = q[i] * q[i];
+        double qi = q[i];
         int itype = type[i];
         int* jlist = firstneigh[i];
         int jnum = numneigh[i];
@@ -96,11 +96,14 @@ void PairDipoleInducedAcciarri::compute(int eflag, int vflag) {
             double rsq = delx*delx + dely*dely + delz*delz;
             int jtype = type[j];
 
+            double qtmp = std::max(qi, q[j]);
+            double q_sq = qtmp * qtmp;
+
             if (rsq < cutsq[itype][jtype]) {
                 double r4 = rsq * rsq; // r^4
                 double r6 = r4 * rsq; // r^6
                 double rratio8 = pow((r_phi_sq[itype][jtype] / rsq), 4.0); // (r_phi/r)^8
-                double fpair = factor * q2tmp * (4.0 * k[itype][jtype] / r6) * (3.0 * rratio8 - 1); // Force per unit length
+                double fpair = factor * q_sq * (4.0 * k[itype][jtype] / r6) * (3.0 * rratio8 - 1); // Force per unit length
 
                 f[i][0] += delx * fpair;
                 f[i][1] += dely * fpair;
@@ -112,7 +115,7 @@ void PairDipoleInducedAcciarri::compute(int eflag, int vflag) {
                 }
 
                 if (eflag) {
-                    evdwl = factor * q2tmp * (k[itype][jtype] / r4) * (rratio8 - 1);
+                    evdwl = factor * q_sq * (k[itype][jtype] / r4) * (rratio8 - 1);
                 }
                 if (evflag) ev_tally(i, j, nlocal, newton_pair, evdwl, 0.0, fpair, delx, dely, delz);
             }
@@ -305,7 +308,7 @@ void PairDipoleInducedAcciarri::write_data_all(FILE* fp) {
 
 /* ---------------------------------------------------------------------- */
 
-double PairDipoleInducedAcciarri::single(int /*i*/, int /*j*/, int itype, int jtype, double rsq,
+double PairDipoleInducedAcciarri::single(int i, int j, int itype, int jtype, double rsq,
                                  double /*factor_coul*/, double factor_lj, double &fforce) {
     // Compute force and energy for a single pair of atoms
     // Force per unit distance written to double& fforce, energy returned
@@ -315,8 +318,11 @@ double PairDipoleInducedAcciarri::single(int /*i*/, int /*j*/, int itype, int jt
     double rratio8 = pow((r_phi_sq[itype][jtype] / rsq), 4.0); // (r_phi/r)^8
     double factor = factor_lj; // TODO: factor_lj or factor_coul?
 
-    fforce = factor * (4.0 * k[itype][jtype] / r6) * (3.0 * rratio8 - 1); // Force per unit length
-    return factor * (k[itype][jtype] / r4) * (rratio8 - 1); // Energy
+    double q = std::max(atom->q[i], atom->q[j]);
+    double q_sq = q * q;
+
+    fforce = factor * q_sq * (4.0 * k[itype][jtype] / r6) * (3.0 * rratio8 - 1); // Force per unit length
+    return factor * q_sq * (k[itype][jtype] / r4) * (rratio8 - 1); // Energy
 }
 
 /* ---------------------------------------------------------------------- */
