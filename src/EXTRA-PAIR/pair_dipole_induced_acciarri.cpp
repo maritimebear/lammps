@@ -103,7 +103,7 @@ void PairDipoleInducedAcciarri::compute(int eflag, int vflag) {
                 double r4 = rsq * rsq; // r^4
                 double r6 = r4 * rsq; // r^6
                 double rratio8 = pow((r_phi_sq[itype][jtype] / rsq), 4.0); // (r_phi/r)^8
-                double fpair = factor * q_sq * (4.0 * k[itype][jtype] / r6) * (3.0 * rratio8 - 1); // Force per unit length
+                double fpair = factor * 4.0 * k[itype][jtype] * q_sq / r6 * (3.0 * rratio8 - 1); // Force per unit length
 
                 f[i][0] += delx * fpair;
                 f[i][1] += dely * fpair;
@@ -115,7 +115,7 @@ void PairDipoleInducedAcciarri::compute(int eflag, int vflag) {
                 }
 
                 if (eflag) {
-                    evdwl = factor * q_sq * (k[itype][jtype] / r4) * (rratio8 - 1);
+                    evdwl = factor * k[itype][jtype] * q_sq / r4 * (rratio8 - 1);
                 }
                 if (evflag) ev_tally(i, j, nlocal, newton_pair, evdwl, 0.0, fpair, delx, dely, delz);
             }
@@ -148,7 +148,7 @@ void PairDipoleInducedAcciarri::allocate() {
 
 void PairDipoleInducedAcciarri::settings(int narg, char** arg) {
    // global settings
-   if (narg != 1) error->all(FLERR, "Pair style dipole/induced must have exactly one argument");
+   if (narg != 1) error->all(FLERR, "Pair style dipole/induced/acciari must have exactly one argument");
    cut_global = utils::numeric(FLERR, arg[0], false, lmp);
 
    // reset per-type pair cutoffs that have been explicitly set previously
@@ -166,24 +166,23 @@ void PairDipoleInducedAcciarri::settings(int narg, char** arg) {
 
 void PairDipoleInducedAcciarri::coeff(int narg, char** arg) {
     // set pair coeffs
-    if (narg < 7 || narg > 8) error->all(FLERR, "Incorrect args for pair coefficients" + utils::errorurl(21));
+    if (narg < 6 || narg > 7) error->all(FLERR, "Incorrect args for pair coefficients" + utils::errorurl(21));
     if (!allocated) allocate();
 
     int ilo, ihi, jlo, jhi;
     utils::bounds(FLERR, arg[0], 1, atom->ntypes, ilo, ihi, error);
     utils::bounds(FLERR, arg[1], 1, atom->ntypes, jlo, jhi, error);
 
-    double factor = utils::numeric(FLERR, arg[2], false, lmp); // 1 / (8pi * vacuum pemittivity)
-    double rel_pol = utils::numeric(FLERR, arg[3], false, lmp); // relative polarisability
-    double bohr_radius = utils::numeric(FLERR, arg[4], false, lmp);
+    double rel_pol = utils::numeric(FLERR, arg[2], false, lmp); // relative polarisability
+    double bohr_radius = utils::numeric(FLERR, arg[3], false, lmp);
     // Coefficients to calculate r_phi = c * a_in
-    double c = utils::numeric(FLERR, arg[5], false, lmp);
-    double a_in = utils::numeric(FLERR, arg[6], false, lmp);
+    double c = utils::numeric(FLERR, arg[4], false, lmp);
+    double a_in = utils::numeric(FLERR, arg[5], false, lmp);
     double cut_tmp = cut_global;
-    if (narg == 10) cut_tmp = utils::numeric(FLERR, arg[7], false, lmp);
+    if (narg == 7) cut_tmp = utils::numeric(FLERR, arg[6], false, lmp);
 
     // Calculate k and r_phi_sq
-    double k_tmp = factor * rel_pol * pow(bohr_radius, 3.0);
+    double k_tmp = 0.5 * force->qqr2e * rel_pol * pow(bohr_radius, 3.0);
     double r_phi_sq_tmp = pow((c * a_in), 2.0);
 
     int count = 0;
@@ -321,8 +320,8 @@ double PairDipoleInducedAcciarri::single(int i, int j, int itype, int jtype, dou
     double q = std::max(atom->q[i], atom->q[j]);
     double q_sq = q * q;
 
-    fforce = factor * q_sq * (4.0 * k[itype][jtype] / r6) * (3.0 * rratio8 - 1); // Force per unit length
-    return factor * q_sq * (k[itype][jtype] / r4) * (rratio8 - 1); // Energy
+    fforce = factor * 4.0 * k[itype][jtype] * q_sq / r6 * (3.0 * rratio8 - 1); // Force per unit length
+    return factor * k[itype][jtype] * q_sq / r4 * (rratio8 - 1); // Energy
 }
 
 /* ---------------------------------------------------------------------- */
