@@ -174,7 +174,7 @@ void PairDipoleInducedCiccotti::coeff(int narg, char** arg) {
     double pol = utils::numeric(FLERR, arg[2], false, lmp);
     double k_tmp = 0.5 * force->qqr2e * pol;
     double cut_tmp = cut_global;
-    if (narg == 4) cut_tmp = utils::numeric(FLERR, arg[7], false, lmp);
+    if (narg == 4) cut_tmp = utils::numeric(FLERR, arg[3], false, lmp);
 
     int count = 0;
     for (int i = ilo; i <= ihi; ++i) {
