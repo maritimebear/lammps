@@ -166,7 +166,7 @@ void PairDipoleInducedAcciarri::settings(int narg, char** arg) {
 
 void PairDipoleInducedAcciarri::coeff(int narg, char** arg) {
     // set pair coeffs
-    if (narg < 6 || narg > 7) error->all(FLERR, "Incorrect args for pair coefficients" + utils::errorurl(21));
+    if (narg < 5 || narg > 6) error->all(FLERR, "Incorrect args for pair coefficients" + utils::errorurl(21));
     if (!allocated) allocate();
 
     int ilo, ihi, jlo, jhi;
@@ -174,12 +174,12 @@ void PairDipoleInducedAcciarri::coeff(int narg, char** arg) {
     utils::bounds(FLERR, arg[1], 1, atom->ntypes, jlo, jhi, error);
 
     double rel_pol = utils::numeric(FLERR, arg[2], false, lmp); // relative polarisability
-    double bohr_radius = utils::numeric(FLERR, arg[3], false, lmp);
+    double bohr_radius = 0.529177210544 * force->angstrom; // https://physics.nist.gov/cuu/Constants/Table/allascii.txt
     // Coefficients to calculate r_phi = c * a_in
-    double c = utils::numeric(FLERR, arg[4], false, lmp);
-    double a_in = utils::numeric(FLERR, arg[5], false, lmp);
+    double c = utils::numeric(FLERR, arg[3], false, lmp);
+    double a_in = utils::numeric(FLERR, arg[4], false, lmp);
     double cut_tmp = cut_global;
-    if (narg == 7) cut_tmp = utils::numeric(FLERR, arg[6], false, lmp);
+    if (narg == 6) cut_tmp = utils::numeric(FLERR, arg[5], false, lmp);
 
     // Calculate k and r_phi_sq
     double k_tmp = 0.5 * force->qqr2e * rel_pol * pow(bohr_radius, 3.0);
